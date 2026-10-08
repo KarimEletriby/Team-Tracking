@@ -1,0 +1,94 @@
+{
+  "users": [
+    {
+      "id": "u_3b2bf9d7",
+      "name": "Dr. Alex Mentor",
+      "email": "alex.mentor@test.com",
+      "passwordHash": "541231e2739bfc10e05438c4c119ab750f0651102ea5648d23edf9decac357fa",
+      "role": "mentor",
+      "createdAt": "2026-10-08T03:29:03.111Z"
+    },
+    {
+      "id": "u_57c61a37",
+      "name": "Maya Lin",
+      "email": "maya@test.com",
+      "passwordHash": "541231e2739bfc10e05438c4c119ab750f0651102ea5648d23edf9decac357fa",
+      "role": "member",
+      "createdAt": "2026-10-08T03:33:46.879Z"
+    },
+    {
+      "id": "u_18cc8249",
+      "name": "aya",
+      "email": "aya@gmail.com",
+      "passwordHash": "cd4acec83204892dc8a292b8ee73379a2a0e9c36c02e500f7714fe16747194a6",
+      "role": "member",
+      "createdAt": "2026-10-08T04:09:53.234Z"
+    }
+  ],
+  "teams": [
+    {
+      "id": "team_b573764d",
+      "mentorId": "u_3b2bf9d7",
+      "name": "Team 1",
+      "createdAt": "2026-10-08T03:29:03.111Z"
+    },
+    {
+      "id": "team_1bfd9e91",
+      "mentorId": "u_3b2bf9d7",
+      "name": "Team 2",
+      "createdAt": "2026-10-08T03:29:03.112Z"
+    }
+  ],
+  "teamMembers": [
+    {
+      "id": "tm_5cd33d6d",
+      "teamId": "team_b573764d",
+      "userId": "u_57c61a37",
+      "createdAt": "2026-10-08T03:33:46.879Z"
+    }
+  ],
+  "memberProfiles": [
+    {
+      "id": "prof_6ef9fa52",
+      "userId": "u_57c61a37",
+      "role": "Frontend Engineer",
+      "responsibilities": [
+        "UI Architecture",
+        "Component Library"
+      ],
+      "technicalSkills": [
+        "React",
+        "TypeScript",
+        "CSS"
+      ],
+      "bio": "Frontend engineer passionate about design systems.",
+      "avatarUrl": "",
+      "updatedAt": "2026-10-08T04:07:13.987Z"
+    },
+    {
+      "id": "prof_ef9cbf17",
+      "userId": "u_18cc8249",
+      "role": "",
+      "responsibilities": [],
+      "technicalSkills": [],
+      "bio": "",
+      "avatarUrl": "",
+      "updatedAt": "2026-10-08T04:09:53.234Z"
+    }
+  ],
+  "updates": [
+    {
+      "id": "upd_44df98b1",
+      "userId": "u_57c61a37",
+      "teamId": "team_b573764d",
+      "title": "Completed Initial Frontend Layout",
+      "whatWorkedOn": "Built responsive layout and card components for tracking system.",
+      "technicalWork": "Implemented clean CSS tokens, modern UI hierarchy, and responsive grid.",
+      "challenges": "",
+      "nextStep": "",
+      "evidenceLink": "",
+      "createdAt": "2026-10-08T04:07:13.994Z",
+      "updatedAt": "2026-10-08T04:07:13.994Z"
+    }
+  ]
+}

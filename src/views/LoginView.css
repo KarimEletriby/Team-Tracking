@@ -22,3 +22,8 @@
   .authIntro > .welcomeBrand { position: absolute; top: 42px; left: 42px; }
   .authIntroCopy { margin-top: 0; }
 }
+
+.passwordInputWrap { position: relative; display: block; }
+.passwordInputWrap input { padding-right: 42px; }
+.passwordToggle { position: absolute; top: 50%; right: 10px; display: inline-flex; align-items: center; justify-content: center; padding: 4px; border: 0; color: #64748b; background: transparent; cursor: pointer; transform: translateY(-50%); }
+.passwordToggle:hover { color: #2563eb; }

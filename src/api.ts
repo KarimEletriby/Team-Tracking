@@ -1,188 +1,76 @@
-import { User, Team, WorkUpdate, MemberDetail, TeamMemberCard, MemberProfile, UserRole } from './types';
+import { User } from './types';
+import { requireSupabase } from './lib/supabase';
 
-const TOKEN_KEY = 'teamtrack_auth_token_v1';
-
-export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setStoredToken(token: string | null): void {
-  if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
-  } else {
-    localStorage.removeItem(TOKEN_KEY);
-  }
-}
-
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = getStoredToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {}),
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(endpoint, {
-    ...options,
-    headers,
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const errorMsg = data?.error || `Request failed with status ${response.status}`;
-    const error = new Error(errorMsg) as Error & { status?: number };
-    error.status = response.status;
-    throw error;
-  }
-
-  return data as T;
-}
-
-// Auth API
-export const api = {
-  // Auth
-  async register(params: { name: string; email: string; password: string; role: UserRole }): Promise<{ user: User; token: string }> {
-    const res = await request<{ user: User; token: string }>('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-    setStoredToken(res.token);
-    return res;
-  },
-
-  async login(params: { email: string; password: string }): Promise<{ user: User; token: string }> {
-    const res = await request<{ user: User; token: string }>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-    setStoredToken(res.token);
-    return res;
-  },
-
-  async getMe(): Promise<{ user: User; profile?: MemberProfile; teamId?: string | null; teamName?: string | null }> {
-    return request('/api/auth/me');
-  },
-
-  async getUsers(): Promise<{ users: User[] }> {
-    return request('/api/auth/users');
-  },
-
-  logout() {
-    setStoredToken(null);
-  },
-
-  // Teams (Mentor Only)
-  async getTeams(): Promise<{ teams: Team[] }> {
-    return request('/api/teams');
-  },
-
-  async createTeam(name: string): Promise<{ team: Team }> {
-    return request('/api/teams', {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    });
-  },
-
-  async getTeam(id: string): Promise<{ team: Team; members: TeamMemberCard[] }> {
-    return request(`/api/teams/${id}`);
-  },
-
-  async updateTeam(id: string, name: string): Promise<{ team: Team }> {
-    return request(`/api/teams/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ name }),
-    });
-  },
-
-  async addMemberToTeam(
-    teamId: string,
-    params: { name: string; email: string; password?: string; roleTitle?: string }
-  ): Promise<{ member: TeamMemberCard }> {
-    return request(`/api/teams/${teamId}/members`, {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  },
-
-  // Members
-  async getMember(id: string): Promise<{ member: MemberDetail }> {
-    return request(`/api/members/${id}`);
-  },
-
-  async updateMemberProfile(
-    id: string,
-    params: Partial<Pick<MemberProfile, 'role' | 'responsibilities' | 'technicalSkills' | 'bio' | 'avatarUrl'>>
-  ): Promise<{ member: MemberDetail }> {
-    return request(`/api/members/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(params),
-    });
-  },
-
-  async getMemberUpdates(id: string): Promise<{ updates: WorkUpdate[] }> {
-    return request(`/api/members/${id}/updates`);
-  },
-
-  // Updates (Member creates/edits own updates)
-  async createUpdate(params: {
-    title: string;
-    whatWorkedOn: string;
-    technicalWork: string;
-    challenges?: string;
-    nextStep?: string;
-    evidenceLink?: string;
-  }): Promise<{ update: WorkUpdate }> {
-    return request('/api/updates', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  },
-
-  async updateUpdate(
-    id: string,
-    params: Partial<{
-      title: string;
-      whatWorkedOn: string;
-      technicalWork: string;
-      challenges: string;
-      nextStep: string;
-      evidenceLink: string;
-    }>
-  ): Promise<{ update: WorkUpdate }> {
-    return request(`/api/updates/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(params),
-    });
-  },
-
-  async deleteUpdate(id: string): Promise<{ success: boolean }> {
-    return request(`/api/updates/${id}`, {
-      method: 'DELETE',
-    });
-  },
+type ProfileRow = {
+  id: string;
+  full_name: string;
+  role: 'mentor' | 'member';
+  created_at: string;
 };
 
-export function formatRelativeTime(isoDate: string | null | undefined): string {
-  if (!isoDate) return 'No updates yet';
-  const now = Date.now();
-  const past = new Date(isoDate).getTime();
-  const diffSec = Math.floor((now - past) / 1000);
-
-  if (diffSec < 60) return 'Just now';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return new Date(isoDate).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+function toApplicationUser(profile: ProfileRow, email: string | undefined): User {
+  return {
+    id: profile.id,
+    name: profile.full_name || email?.split('@')[0] || 'TeamTrack user',
+    email: email ?? '',
+    role: profile.role,
+    createdAt: profile.created_at,
+  };
 }
+
+/** Authentication operations shared by the application shell and welcome flow. */
+export const api = {
+  async register(params: { name: string; email: string; password: string; role: 'mentor' | 'member' }): Promise<{ user: User | null; requiresEmailConfirmation: boolean }> {
+    const supabase = requireSupabase();
+    const { data, error } = await supabase.auth.signUp({
+      email: params.email,
+      password: params.password,
+      options: {
+        data: { full_name: params.name, requested_role: params.role },
+        emailRedirectTo: window.location.origin,
+      },
+    });
+
+    if (error) throw error;
+    if (!data.user) throw new Error('Account creation could not be completed.');
+
+    if (!data.session) {
+      return { user: null, requiresEmailConfirmation: true };
+    }
+
+    const user = await this.getMe();
+    return { user: user.user, requiresEmailConfirmation: false };
+  },
+
+  async login(params: { email: string; password: string }): Promise<{ user: User }> {
+    const supabase = requireSupabase();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: params.email,
+      password: params.password,
+    });
+
+    if (error) throw error;
+    return this.getMe();
+  },
+
+  async getMe(): Promise<{ user: User }> {
+    const supabase = requireSupabase();
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    if (!authUser) throw new Error('Please sign in to continue.');
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, created_at')
+      .eq('id', authUser.id)
+      .single<ProfileRow>();
+    if (profileError) throw profileError;
+
+    return { user: toApplicationUser(profile, authUser.email) };
+  },
+
+  async logout() {
+    const { error } = await requireSupabase().auth.signOut();
+    if (error) throw error;
+  },
+};

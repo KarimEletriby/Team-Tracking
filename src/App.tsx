@@ -2,153 +2,90 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { LoginView } from './views/LoginView';
-import { MentorDashboard } from './views/MentorDashboard';
-import { TeamDetailView } from './views/TeamDetailView';
-import { MemberProfileView } from './views/MemberProfileView';
-import { MemberUpdatesView } from './views/MemberUpdatesView';
-import { AddTeamModal } from './components/AddTeamModal';
-import { RenameTeamModal } from './components/RenameTeamModal';
-import { AddMemberModal } from './components/AddMemberModal';
-import { EditProfileModal } from './components/EditProfileModal';
-import { AddUpdateModal } from './components/AddUpdateModal';
-import { api, getStoredToken } from './api';
-import { User, Team, WorkUpdate, MemberProfile } from './types';
+import { MentorWorkspaceView } from './views/MentorWorkspaceView';
+import { MemberWorkspaceView } from './views/MemberWorkspaceView';
+import { api } from './api';
+import { requireSupabase } from './lib/supabase';
+import { supabaseMemberRepository } from './member';
+import { supabaseMentorRepository } from './mentor';
+import { User } from './types';
 
 export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentProfile, setCurrentProfile] = useState<MemberProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   // Navigation
-  // Mentor views: 'dashboard', 'teams', 'team-detail', 'member-detail'
+  // Mentor views: 'dashboard', 'teams'. Workspace navigation is local to the mentor prototype.
   // Member views: 'profile', 'updates'
   const [currentView, setCurrentView] = useState<string>('dashboard');
-  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-
-  // Mentor Teams list state
-  const [teams, setTeams] = useState<Team[]>([]);
-
-  // Modals state
-  const [isAddTeamOpen, setIsAddTeamOpen] = useState(false);
-  const [isRenameTeamOpen, setIsRenameTeamOpen] = useState(false);
-  const [teamToRename, setTeamToRename] = useState<Team | null>(null);
-  
-  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
-  const [teamToAddMemberTo, setTeamToAddMemberTo] = useState<Team | null>(null);
-
-  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
-  const [isAddUpdateOpen, setIsAddUpdateOpen] = useState(false);
-  const [updateToEdit, setUpdateToEdit] = useState<WorkUpdate | null>(null);
-
-  // Check existing session on boot
+  const [mentorNavigationSignal, setMentorNavigationSignal] = useState(0);
   useEffect(() => {
-    const initAuth = async () => {
-      const token = getStoredToken();
-      if (!token) {
-        setAuthLoading(false);
-        return;
-      }
+    let isMounted = true;
+
+    const syncAuthenticatedUser = async () => {
       try {
         const res = await api.getMe();
+        if (!isMounted) return;
         setCurrentUser(res.user);
         if (res.user.role === 'mentor') {
           setCurrentView('dashboard');
-          loadMentorTeams();
         } else {
           setCurrentView('profile');
-          if (res.profile) setCurrentProfile(res.profile);
         }
       } catch {
-        api.logout();
+        if (!isMounted) return;
         setCurrentUser(null);
       } finally {
-        setAuthLoading(false);
+        if (isMounted) setAuthLoading(false);
       }
     };
-    initAuth();
-  }, []);
 
-  const loadMentorTeams = async () => {
+    let unsubscribe: (() => void) | undefined;
     try {
-      const res = await api.getTeams();
-      setTeams(res.teams);
+      const supabase = requireSupabase();
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (!session) {
+          setCurrentUser(null);
+          setAuthLoading(false);
+          return;
+        }
+        void syncAuthenticatedUser();
+      });
+      unsubscribe = () => subscription.unsubscribe();
+
+      void supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session) {
+          if (isMounted) setAuthLoading(false);
+          return;
+        }
+        void syncAuthenticatedUser();
+      });
     } catch {
-      // ignore
+      setAuthLoading(false);
     }
-  };
+
+    return () => {
+      isMounted = false;
+      unsubscribe?.();
+    };
+  }, []);
 
   const handleLoginSuccess = async (user: User) => {
     setCurrentUser(user);
     if (user.role === 'mentor') {
       setCurrentView('dashboard');
-      await loadMentorTeams();
     } else {
       setCurrentView('profile');
-      try {
-        const res = await api.getMember(user.id);
-        setCurrentProfile(res.member.profile);
-      } catch {
-        // ignore
-      }
     }
   };
 
-  const handleLogout = () => {
-    api.logout();
+  const handleLogout = async () => {
     setCurrentUser(null);
-    setCurrentProfile(null);
-    setSelectedTeamId(null);
-    setSelectedMemberId(null);
     setCurrentView('dashboard');
-  };
-
-  // Team actions
-  const handleCreateTeam = async (name: string) => {
-    const res = await api.createTeam(name);
-    setTeams((prev) => [...prev, res.team]);
-  };
-
-  const handleRenameTeam = async (newName: string) => {
-    if (!teamToRename) return;
-    const res = await api.updateTeam(teamToRename.id, newName);
-    setTeams((prev) => prev.map((t) => (t.id === res.team.id ? { ...t, name: res.team.name } : t)));
-    setTeamToRename(null);
-  };
-
-  const handleAddMember = async (params: { name: string; email: string; password?: string; roleTitle?: string }) => {
-    if (!teamToAddMemberTo) return;
-    await api.addMemberToTeam(teamToAddMemberTo.id, params);
-    await loadMentorTeams();
-  };
-
-  // Member profile actions
-  const handleSaveProfile = async (profileData: {
-    role: string;
-    responsibilities: string[];
-    technicalSkills: string[];
-    bio: string;
-    avatarUrl: string;
-  }) => {
-    if (!currentUser) return;
-    const res = await api.updateMemberProfile(currentUser.id, profileData);
-    setCurrentProfile(res.member.profile);
-  };
-
-  // Member update actions
-  const handleSaveUpdate = async (updateData: {
-    title: string;
-    whatWorkedOn: string;
-    technicalWork: string;
-    challenges?: string;
-    nextStep?: string;
-    evidenceLink?: string;
-  }) => {
-    if (updateToEdit) {
-      await api.updateUpdate(updateToEdit.id, updateData);
-      setUpdateToEdit(null);
-    } else {
-      await api.createUpdate(updateData);
+    try {
+      await api.logout();
+    } catch {
+      // The local UI is already signed out; Supabase will retry token cleanup.
     }
   };
 
@@ -167,8 +104,7 @@ export function App() {
   // Determine page title for Header
   const getHeaderTitle = () => {
     if (currentUser.role === 'mentor') {
-      if (currentView === 'team-detail') return 'Team Details';
-      if (currentView === 'member-detail') return 'Member Profile & Contributions';
+      if (currentView === 'teams') return 'My Teams';
       return 'Mentor Dashboard';
     } else {
       if (currentView === 'updates') return 'My Work Updates';
@@ -182,13 +118,9 @@ export function App() {
       <Sidebar
         currentUser={currentUser}
         currentView={currentView}
-        onNavigate={(view) => {
-          setCurrentView(view);
-          if (view === 'dashboard' || view === 'teams') {
-            setSelectedTeamId(null);
-            setSelectedMemberId(null);
-            loadMentorTeams();
-          }
+          onNavigate={(view) => {
+            setCurrentView(view);
+            if (currentUser.role === 'mentor') setMentorNavigationSignal((signal) => signal + 1);
         }}
         onLogout={handleLogout}
       />
@@ -203,139 +135,15 @@ export function App() {
         <main>
           {/* MENTOR FLOW */}
           {currentUser.role === 'mentor' && (
-            <>
-              {(currentView === 'dashboard' || currentView === 'teams') && (
-                <MentorDashboard
-                  teams={teams}
-                  onOpenTeam={(teamId) => {
-                    setSelectedTeamId(teamId);
-                    setCurrentView('team-detail');
-                  }}
-                  onOpenAddTeam={() => setIsAddTeamOpen(true)}
-                  onOpenRenameTeam={(team) => {
-                    setTeamToRename(team);
-                    setIsRenameTeamOpen(true);
-                  }}
-                />
-              )}
-
-              {currentView === 'team-detail' && selectedTeamId && (
-                <TeamDetailView
-                  teamId={selectedTeamId}
-                  onBack={() => {
-                    setCurrentView('dashboard');
-                    loadMentorTeams();
-                  }}
-                  onSelectMember={(memberId) => {
-                    setSelectedMemberId(memberId);
-                    setCurrentView('member-detail');
-                  }}
-                  onOpenAddMember={(team) => {
-                    setTeamToAddMemberTo(team);
-                    setIsAddMemberOpen(true);
-                  }}
-                  onOpenRenameTeam={(team) => {
-                    setTeamToRename(team);
-                    setIsRenameTeamOpen(true);
-                  }}
-                />
-              )}
-
-              {currentView === 'member-detail' && selectedMemberId && (
-                <MemberProfileView
-                  memberId={selectedMemberId}
-                  currentUser={currentUser}
-                  onBack={() => {
-                    setCurrentView('team-detail');
-                  }}
-                  onOpenEditProfile={() => {}}
-                  onOpenAddUpdate={() => {}}
-                  onOpenEditUpdate={() => {}}
-                />
-              )}
-            </>
+            <MentorWorkspaceView mentorId={currentUser.id} mentorName={currentUser.name} externalView={currentView} navigationSignal={mentorNavigationSignal} onSectionChange={setCurrentView} repository={supabaseMentorRepository} />
           )}
 
           {/* MEMBER FLOW */}
           {currentUser.role === 'member' && (
-            <>
-              {currentView === 'profile' && (
-                <MemberProfileView
-                  memberId={currentUser.id}
-                  currentUser={currentUser}
-                  onOpenEditProfile={() => setIsEditProfileOpen(true)}
-                  onOpenAddUpdate={() => {
-                    setUpdateToEdit(null);
-                    setIsAddUpdateOpen(true);
-                  }}
-                  onOpenEditUpdate={(upd) => {
-                    setUpdateToEdit(upd);
-                    setIsAddUpdateOpen(true);
-                  }}
-                />
-              )}
-
-              {currentView === 'updates' && (
-                <MemberUpdatesView
-                  currentUser={currentUser}
-                  onOpenAddUpdate={() => {
-                    setUpdateToEdit(null);
-                    setIsAddUpdateOpen(true);
-                  }}
-                  onOpenEditUpdate={(upd) => {
-                    setUpdateToEdit(upd);
-                    setIsAddUpdateOpen(true);
-                  }}
-                />
-              )}
-            </>
+            <MemberWorkspaceView memberId={currentUser.id} memberName={currentUser.name} externalView={currentView} onSectionChange={setCurrentView} repository={supabaseMemberRepository} />
           )}
         </main>
       </div>
-
-      {/* Modals */}
-      <AddTeamModal
-        isOpen={isAddTeamOpen}
-        onClose={() => setIsAddTeamOpen(false)}
-        onSubmit={handleCreateTeam}
-      />
-
-      <RenameTeamModal
-        isOpen={isRenameTeamOpen}
-        onClose={() => {
-          setIsRenameTeamOpen(false);
-          setTeamToRename(null);
-        }}
-        currentName={teamToRename?.name || ''}
-        onSubmit={handleRenameTeam}
-      />
-
-      <AddMemberModal
-        isOpen={isAddMemberOpen}
-        onClose={() => {
-          setIsAddMemberOpen(false);
-          setTeamToAddMemberTo(null);
-        }}
-        teamName={teamToAddMemberTo?.name || ''}
-        onSubmit={handleAddMember}
-      />
-
-      <EditProfileModal
-        isOpen={isEditProfileOpen}
-        onClose={() => setIsEditProfileOpen(false)}
-        profile={currentProfile}
-        onSave={handleSaveProfile}
-      />
-
-      <AddUpdateModal
-        isOpen={isAddUpdateOpen}
-        onClose={() => {
-          setIsAddUpdateOpen(false);
-          setUpdateToEdit(null);
-        }}
-        updateToEdit={updateToEdit}
-        onSubmit={handleSaveUpdate}
-      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   Clock, 
   LogOut, 
   Code2, 
+  ShieldCheck,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';

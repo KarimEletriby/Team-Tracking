@@ -5,6 +5,8 @@ import {
   ArrowRight,
   CheckCircle2,
   Code2,
+  Eye,
+  EyeOff,
   LayoutDashboard,
   ShieldCheck,
   UsersRound,
@@ -65,6 +67,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -255,14 +258,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           {mode === 'login' ? (
             <form className="authForm" onSubmit={handleLogin}>
               <label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoFocus required /></label>
-              <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" required /></label>
+              <label><span>Password</span><span className="passwordInputWrap"><input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" required /><button type="button" className="passwordToggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></span></label>
               <button className="btn btn-primary authSubmit" type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign in'} <ArrowRight size={17} /></button>
             </form>
           ) : (
             <form className="authForm" onSubmit={handleRegister}>
               <label>Full name<input type="text" value={regName} onChange={(event) => setRegName(event.target.value)} placeholder="e.g. Maya Lin" autoFocus required /></label>
               <label>Email address<input type="email" value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="you@example.com" required /></label>
-              <label>Password<input type="password" value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder="Create a password" minLength={6} required /></label>
+              <label><span>Password</span><span className="passwordInputWrap"><input type={showPassword ? 'text' : 'password'} value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder="Create a password" minLength={6} required /><button type="button" className="passwordToggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></span></label>
               {selectedRole === 'member' && (
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
                   Enter the email address provided by your mentor to automatically join your assigned team.

@@ -94,6 +94,101 @@ a {
   flex-shrink: 0;
   border-right: 1px solid var(--sidebar-border);
   min-height: 100vh;
+  transition: width 0.2s ease;
+}
+
+.sidebar-collapsed {
+  width: 78px;
+}
+
+.sidebar-brand {
+  position: relative;
+}
+
+.sidebar-collapsed .sidebar-brand {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+.sidebar-brand > div:first-child {
+  min-width: 0;
+}
+
+.sidebar-brand-copy,
+.sidebar-label,
+.sidebar-section-label,
+.sidebar-user-details {
+  transition: opacity 0.15s ease, width 0.2s ease;
+}
+
+.sidebar-collapsed .sidebar-brand-copy,
+.sidebar-collapsed .sidebar-label,
+.sidebar-collapsed .sidebar-section-label,
+.sidebar-collapsed .sidebar-user-details {
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-collapsed .sidebar-brand {
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar-collapsed .sidebar-brand > div:first-child {
+  gap: 0 !important;
+}
+
+.sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 7px;
+  color: var(--sidebar-text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.sidebar-toggle:hover {
+  color: var(--sidebar-text-hover);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-collapsed .sidebar-toggle {
+  position: absolute;
+  top: 13px;
+  right: 9px;
+  width: 25px;
+  height: 25px;
+  background: var(--sidebar-bg);
+  transform: translateX(50%);
+}
+
+.sidebar-collapsed .sidebar-nav-item {
+  justify-content: center;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.sidebar-collapsed .sidebar-footer {
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+}
+
+.sidebar-collapsed .sidebar-user-card {
+  justify-content: center;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+.sidebar-collapsed #btn-logout {
+  justify-content: center !important;
 }
 
 .main-content {

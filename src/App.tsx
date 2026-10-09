@@ -99,13 +99,23 @@ export function App() {
       });
       unsubscribe = () => subscription.unsubscribe();
 
-      void supabase.auth.getSession().then(({ data: { session } }) => {
-        if (!session) {
+      const safetyTimer = setTimeout(() => {
+        if (isMounted) setAuthLoading(false);
+      }, 3500);
+
+      void supabase.auth.getSession()
+        .then(({ data: { session } }) => {
+          clearTimeout(safetyTimer);
+          if (!session) {
+            if (isMounted) setAuthLoading(false);
+            return;
+          }
+          void syncAuthenticatedUser();
+        })
+        .catch(() => {
+          clearTimeout(safetyTimer);
           if (isMounted) setAuthLoading(false);
-          return;
-        }
-        void syncAuthenticatedUser();
-      });
+        });
     } catch {
       setAuthLoading(false);
     }
@@ -154,8 +164,38 @@ export function App() {
 
   if (authLoading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-page)' }}>
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>Loading application...</div>
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#0f172a',
+          color: '#ffffff',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          gap: '16px',
+        }}
+      >
+        <div
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            border: '3px solid rgba(255, 255, 255, 0.1)',
+            borderTopColor: '#2563eb',
+            animation: 'teamtrack-spin 0.75s linear infinite',
+          }}
+        />
+        <div style={{ color: '#94a3b8', fontSize: '0.95rem', fontWeight: 500 }}>
+          Loading TeamTrack...
+        </div>
+        <style>{`
+          @keyframes teamtrack-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }

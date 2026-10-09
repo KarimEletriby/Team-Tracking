@@ -24,7 +24,7 @@ begin
     else
       return jsonb_build_object(
         'allowed', false,
-        'message', 'هذا البريد غير مصرح له بالدخول كمسؤول للنظام.'
+        'message', 'This email is not authorized for administrator access.'
       );
     end if;
   end if;
@@ -37,7 +37,7 @@ begin
     else
       return jsonb_build_object(
         'allowed', false,
-        'message', 'هذا البريد غير معتمد كمرشد في النظام. يجب أن يضيفك المشرف العام (Karim Eletriby - karimeletriby15@gmail.com) أولاً.'
+        'message', 'This email is not authorized as a mentor. Please contact the administrator for access.'
       );
     end if;
   end if;
@@ -54,12 +54,12 @@ begin
     else
       return jsonb_build_object(
         'allowed', false,
-        'message', 'هذا البريد غير مضاف لأي فريق. يجب أن يقوم المرشد (Mentor) بإضافتك إلى فريقه أولاً.'
+        'message', 'This email is not assigned to any team. Your mentor must add you to a team first.'
       );
     end if;
   end if;
 
-  return jsonb_build_object('allowed', false, 'message', 'الدور المطلوب غير صالح.');
+  return jsonb_build_object('allowed', false, 'message', 'Invalid role requested.');
 end;
 $$;
 
@@ -98,7 +98,7 @@ begin
 
   -- 5. Otherwise REJECT unauthorized registration:
   else
-    raise exception 'غير مصرح بالتسجيل: هذا البريد الإلكتروني غير مدعو أو غير معتمد في النظام.';
+    raise exception 'Unauthorized registration: this email is not invited or authorized on the platform.';
   end if;
 
   insert into public.profiles (id, full_name, email, avatar_url, role)

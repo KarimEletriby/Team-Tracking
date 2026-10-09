@@ -65,7 +65,7 @@ const SIGNED_URL_LIFETIME_SECONDS = 60 * 60;
 function throwIfError(error: { message: string; code?: string } | null): void {
   if (error) {
     if ((error as any).code === 'PGRST205' || error.message.includes('team_invitations') || error.message.includes('mentor_invitations')) {
-      throw new Error('جدول الدعوات غير موجود بقاعدة البيانات. يرجى تشغيل كود SQL من ملف execute_in_supabase_sql_editor.sql في Supabase Dashboard -> SQL Editor لتفعيل إضافة الأعضاء.');
+      throw new Error('Invitations table not found in the database. Please execute the SQL migration script in your Supabase SQL Editor.');
     }
     throw new Error(error.message);
   }

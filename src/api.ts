@@ -30,7 +30,7 @@ export const api = {
     if (role === 'admin') {
       return {
         allowed: false,
-        message: 'غير مصرح بإنشاء حساب مسؤول جديد. الوصول إلى بوابة المسؤول مخصص للمشرف العام فقط.',
+        message: 'Administrator registration is restricted. Only authorized system administrators may access this portal.',
       };
     }
 
@@ -42,9 +42,19 @@ export const api = {
       });
 
       if (!error && data && typeof data === 'object') {
+        let msg = (data as any).message;
+        if (msg && /[\u0600-\u06FF]/.test(msg)) {
+          if (role === 'mentor') {
+            msg = 'This email is not authorized as a mentor. Please contact the administrator for access.';
+          } else if (role === 'member') {
+            msg = 'This email is not assigned to any team. Your mentor must add you to a team first.';
+          } else {
+            msg = 'This email is not authorized to register on the platform.';
+          }
+        }
         return {
           allowed: Boolean((data as any).allowed),
-          message: (data as any).message,
+          message: msg,
         };
       }
     } catch {
@@ -63,7 +73,7 @@ export const api = {
         if (error || !data) {
           return {
             allowed: false,
-            message: 'هذا البريد غير معتمد كمرشد في النظام. يجب اعتماد حسابك من قِبل المشرف العام أولاً.',
+            message: 'This email is not authorized as a mentor. Please contact the administrator for access.',
           };
         }
       }
@@ -78,14 +88,14 @@ export const api = {
         if (error || !data) {
           return {
             allowed: false,
-            message: 'هذا البريد غير مضاف لأي فريق. يجب أن يقوم المرشد (Mentor) بإضافتك إلى فريقه أولاً لتتمكن من الانضمام.',
+            message: 'This email is not assigned to any team. Your mentor must add you to a team first.',
           };
         }
       }
     } catch {
       return {
         allowed: false,
-        message: 'تعذر التحقق من صلاحية البريد الإلكتروني. يرجى التأكد من إضافة المرشد لبريدك أولاً.',
+        message: 'Unable to verify email authorization. Please ensure you have been invited by your mentor.',
       };
     }
 
@@ -100,7 +110,7 @@ export const api = {
     // Strict pre-registration authorization check
     const eligibility = await this.checkEligibility(params.email, effectiveRole);
     if (!eligibility.allowed) {
-      throw new Error(eligibility.message || 'هذا البريد غير مصرح له بالتسجيل في النظام.');
+      throw new Error(eligibility.message || 'This email is not authorized to register on the platform.');
     }
 
     const { data, error } = await supabase.auth.signUp({
@@ -113,8 +123,12 @@ export const api = {
     });
 
     if (error) {
-      if (error.message.includes('غير مصرح') || error.message.toLowerCase().includes('not authorized')) {
-        throw new Error('هذا البريد غير مصرح له بالتسجيل. يجب أن تتم إضافتك مسبقاً من قِبل المرشد أو المسؤول.');
+      if (
+        error.message.toLowerCase().includes('not authorized') ||
+        error.message.toLowerCase().includes('unauthorized') ||
+        /[\u0600-\u06FF]/.test(error.message)
+      ) {
+        throw new Error('This email is not authorized to register. You must be invited by a mentor or administrator first.');
       }
       throw error;
     }
@@ -146,7 +160,10 @@ export const api = {
         throw new Error('Email not confirmed. Check your inbox for the confirmation link, or disable "Confirm email" in Supabase Auth Settings.');
       }
       if (error.message.toLowerCase().includes('invalid login credentials')) {
-        throw new Error('بيانات الدخول غير صحيحة. يرجى التأكد من البريد الإلكتروني وكلمة المرور.');
+        throw new Error('Invalid email or password. Please verify your credentials.');
+      }
+      if (/[\u0600-\u06FF]/.test(error.message)) {
+        throw new Error('Invalid email or password. Please verify your credentials.');
       }
       throw error;
     }
@@ -157,7 +174,7 @@ export const api = {
     if (params.expectedRole === 'admin') {
       if (user.role !== 'admin') {
         await supabase.auth.signOut();
-        throw new Error('هذا البريد غير مصرح له بالدخول كمسؤول للنظام.');
+        throw new Error('This account is not authorized for administrator portal access.');
       }
     }
 
@@ -165,7 +182,7 @@ export const api = {
     if (params.expectedRole === 'mentor') {
       if (user.role !== 'mentor' && user.role !== 'admin') {
         await supabase.auth.signOut();
-        throw new Error('هذا الحساب ليس حساب مرشد (Mentor). إذا كنت عضواً في فريق، يرجى تسجيل الدخول من بوابة أعضاء الفرق.');
+        throw new Error('This account is not a mentor account. If you are a team member, please sign in via the Member portal.');
       }
     }
 
@@ -173,7 +190,7 @@ export const api = {
     if (params.expectedRole === 'member') {
       if (user.role === 'mentor') {
         await supabase.auth.signOut();
-        throw new Error('هذا الحساب مسجل كمرشد (Mentor). يرجى تسجيل الدخول من بوابة المرشدين.');
+        throw new Error('This account is registered as a mentor. Please sign in via the Mentor portal.');
       }
     }
 
@@ -214,7 +231,7 @@ export const api = {
 
       if (!isAssigned) {
         await supabase.auth.signOut();
-        throw new Error('هذا البريد الإلكتروني غير مضاف لأي فريق في النظام. يجب أن يقوم المرشد (Mentor) بإضافتك أولاً إلى فريقه لتتمكن من الدخول.');
+        throw new Error('This email is not assigned to any team. You must be added to a team by a mentor before signing in.');
       }
     }
 

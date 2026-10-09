@@ -178,6 +178,20 @@ export function App() {
     }
   };
 
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+      if (state && state.appView) {
+        setCurrentView(state.appView);
+        if (currentUser?.role === 'mentor' || (currentUser?.role === 'admin' && activeWorkspace === 'mentor')) {
+          setMentorNavigationSignal((signal) => signal + 1);
+        }
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentUser, activeWorkspace]);
+
   return (
     <div className="app-container">
       {/* Sidebar */}
@@ -188,6 +202,9 @@ export function App() {
         onSwitchWorkspace={handleSwitchAdminWorkspace}
         onNavigate={(view) => {
           setCurrentView(view);
+          const url = new URL(window.location.href);
+          url.searchParams.set('tab', view);
+          window.history.pushState({ appView: view }, '', url.toString());
           if (currentUser.role === 'mentor' || (currentUser.role === 'admin' && activeWorkspace === 'mentor')) {
             setMentorNavigationSignal((signal) => signal + 1);
           }

@@ -267,33 +267,73 @@ export function MentorWorkspaceView({ mentorId, mentorName, externalView, naviga
     if (externalView === 'teams') { setScreen('teams'); setWorkspace(null); setReview(null); setSearch(''); setFilter('all'); }
   }, [navigationSignal]);
 
-  const goToTeams = () => {
+  const goToOverview = (pushHistory = true) => {
+    setScreen('overview');
+    setWorkspace(null);
+    setReview(null);
+    setSearch('');
+    setFilter('all');
+    onSectionChange?.('dashboard');
+    if (pushHistory) {
+      window.history.pushState({ mentorScreen: 'overview' }, '', '?view=dashboard');
+    }
+  };
+
+  const goToTeams = (pushHistory = true) => {
     setScreen('teams');
     setWorkspace(null);
     setReview(null);
     setSearch('');
     setFilter('all');
     onSectionChange?.('teams');
+    if (pushHistory) {
+      window.history.pushState({ mentorScreen: 'teams' }, '', '?view=teams');
+    }
   };
 
-  const openTeam = async (teamId: string) => {
+  const openTeam = async (teamId: string, pushHistory = true) => {
     setLoading(true); setLoadError(null);
     try {
       const data = await repository.getTeamWorkspace(teamId);
       if (!data) { setLoadError('This team is no longer available.'); return; }
       setWorkspace(data); setTeamTab('overview'); setScreen('team'); onSectionChange?.('teams');
+      if (pushHistory) {
+        window.history.pushState({ mentorScreen: 'team', teamId }, '', `?view=team&teamId=${teamId}`);
+      }
     } catch { setLoadError('The team workspace could not be loaded.'); }
     finally { setLoading(false); }
   };
-  const openMember = async (memberId: string) => {
+
+  const openMember = async (memberId: string, pushHistory = true) => {
     setLoading(true); setLoadError(null);
     try {
       const data = await repository.getMemberReview(memberId);
       if (!data) { setLoadError('This member profile is no longer available.'); return; }
       setReview(data); setScreen('member'); onSectionChange?.('teams');
+      if (pushHistory) {
+        window.history.pushState({ mentorScreen: 'member', memberId, teamId: workspace?.team.id }, '', `?view=member&memberId=${memberId}`);
+      }
     } catch { setLoadError('The member profile could not be loaded.'); }
     finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+      if (!state || state.mentorScreen === 'overview') {
+        goToOverview(false);
+      } else if (state.mentorScreen === 'teams') {
+        goToTeams(false);
+      } else if (state.mentorScreen === 'team' && state.teamId) {
+        void openTeam(state.teamId, false);
+      } else if (state.mentorScreen === 'member' && state.memberId) {
+        void openMember(state.memberId, false);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [workspace]);
+
   const refreshManagementData = async (teamId?: string) => {
     try {
       const [dashboardData, teamData] = await Promise.all([
@@ -325,7 +365,7 @@ export function MentorWorkspaceView({ mentorId, mentorName, externalView, naviga
   ];
 
   const renderDashboard = () => <>
-    <PageHeader eyebrow="Mentor workspace" title={`Welcome back, ${mentorName}`} description="A focused overview of teams, recent work, and the people who need your attention." actions={<button className="btn btn-primary" type="button" onClick={goToTeams}>View teams <ArrowRight size={16} /></button>} />
+    <PageHeader eyebrow="Mentor workspace" title={`Welcome back, ${mentorName}`} description="A focused overview of teams, recent work, and the people who need your attention." actions={<button className="btn btn-primary" type="button" onClick={() => goToTeams()}>View teams <ArrowRight size={16} /></button>} />
     <div className={styles.statGrid}>
       <StatCard label="Teams" value={dashboard.summary.teamCount} hint="Under your supervision" icon={<FolderKanban size={17} />} />
       <StatCard label="Members" value={dashboard.summary.memberCount} hint="Across all teams" icon={<Users size={17} />} />
@@ -333,7 +373,7 @@ export function MentorWorkspaceView({ mentorId, mentorName, externalView, naviga
       <StatCard label="Need attention" value={dashboard.summary.membersNeedingAttention} hint="Members needing a check-in" icon={<AlertCircle size={17} />} />
     </div>
     <div className={styles.dashboardGrid}>
-      <section className={`card ${styles.sectionCard}`}><div className={styles.sectionHeading}><div><h2>Teams needing attention</h2><p>Open a workspace to see members who need a check-in.</p></div><button type="button" className={styles.textButton} onClick={goToTeams}>All teams</button></div>
+      <section className={`card ${styles.sectionCard}`}><div className={styles.sectionHeading}><div><h2>Teams needing attention</h2><p>Open a workspace to see members who need a check-in.</p></div><button type="button" className={styles.textButton} onClick={() => goToTeams()}>All teams</button></div>
         <div className={styles.teamList}>{dashboard.teams.map((team) => <button key={team.id} type="button" className={styles.attentionTeam} onClick={() => void openTeam(team.id)}><span><strong>{team.name}</strong><small>{team.needsAttentionCount} member{team.needsAttentionCount === 1 ? '' : 's'} need attention</small></span><StatusBadge {...healthBadge(team.health)} /></button>)}</div>
       </section>
       <section className={`card ${styles.sectionCard}`}><div className={styles.sectionHeading}><div><h2>Recent activity</h2><p>Latest movement across your teams.</p></div></div>
@@ -344,6 +384,19 @@ export function MentorWorkspaceView({ mentorId, mentorName, externalView, naviga
   </>;
 
   const renderTeams = () => <>
+    <div style={{ marginBottom: '14px' }}>
+      <button
+        type="button"
+        className="btn btn-secondary"
+        onClick={() => {
+          if (window.history.state?.mentorScreen) window.history.back();
+          else goToOverview();
+        }}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+      >
+        <ArrowLeft size={16} /> Back to dashboard
+      </button>
+    </div>
     <PageHeader eyebrow="Mentor workspace" title="My teams" description="Create teams, organize members, and open the right workspace quickly." actions={<button type="button" className="btn btn-primary" onClick={() => setTeamToManage(null)}><Plus size={16} />Create team</button>} />
     <SearchFilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Search teams or projects" filters={[{ id: 'health', label: 'Filter team health', value: filter, options: [{ value: 'all', label: 'All statuses' }, { value: 'on-track', label: 'On track' }, { value: 'needs-attention', label: 'Needs attention' }, { value: 'at-risk', label: 'At risk' }] }]} onFilterChange={(_, value) => setFilter(value)} />
     <div className={styles.teamGrid}>{filteredTeams.map((team) => <TeamCard key={team.id} team={team} onOpen={() => void openTeam(team.id)} onManage={() => setTeamToManage(team)} />)}</div>
@@ -354,7 +407,20 @@ export function MentorWorkspaceView({ mentorId, mentorName, externalView, naviga
     if (!workspace) return null;
     const { team } = workspace;
     return <>
-      <Breadcrumbs items={[{ label: 'My teams', onClick: goToTeams }, { label: team.name }]} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            if (window.history.state?.mentorScreen) window.history.back();
+            else goToTeams();
+          }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+        >
+          <ArrowLeft size={16} /> Back to teams
+        </button>
+        <Breadcrumbs items={[{ label: 'My teams', onClick: () => goToTeams() }, { label: team.name }]} />
+      </div>
       <PageHeader eyebrow="Team workspace" title={team.name} description={team.projectGoal} actions={<><StatusBadge {...healthBadge(team.health)} /><button type="button" className="btn btn-secondary" onClick={() => setTeamToManage(team)}><Settings2 size={16} />Manage team</button><button type="button" className="btn btn-primary" onClick={() => { setMemberToManage(null); setMemberManagementTeamId(team.id); }}><UserPlus size={16} />Add member</button></>} />
       <div className={styles.workspaceSummary}><div><span>Project</span><strong>{team.projectName}</strong></div><div><span>Members</span><strong>{team.memberCount}</strong></div><div><span>Progress</span><strong>{team.completionPercent}%</strong></div><div><span>Need attention</span><strong>{team.needsAttentionCount}</strong></div></div>
       <div className={styles.tabs} role="tablist" aria-label="Team workspace sections">{teamTabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={teamTab === tab.id} className={teamTab === tab.id ? styles.tabActive : styles.tab} onClick={() => { setTeamTab(tab.id); setSearch(''); setFilter('all'); }}>{tab.label}</button>)}</div>
@@ -367,7 +433,21 @@ export function MentorWorkspaceView({ mentorId, mentorName, externalView, naviga
   const renderMember = () => {
     if (!review) return null;
     return <>
-      <Breadcrumbs items={[{ label: 'My teams', onClick: goToTeams }, ...(workspace ? [{ label: workspace.team.name, onClick: () => setScreen('team') }] : []), { label: review.member.name }]} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            if (window.history.state?.mentorScreen) window.history.back();
+            else if (workspace) setScreen('team');
+            else goToTeams();
+          }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+        >
+          <ArrowLeft size={16} /> {workspace ? `Back to ${workspace.team.name}` : 'Back to teams'}
+        </button>
+        <Breadcrumbs items={[{ label: 'My teams', onClick: () => goToTeams() }, ...(workspace ? [{ label: workspace.team.name, onClick: () => setScreen('team') }] : []), { label: review.member.name }]} />
+      </div>
       <PageHeader eyebrow="Member workspace" title={review.member.name} description={`${review.member.projectRole} · ${review.member.email}`} actions={<button type="button" className="btn btn-secondary" onClick={() => { setMemberToManage(review.member); setMemberManagementTeamId(review.member.teamId); }}><Settings2 size={16} />Manage member</button>} />
       <section className={`card ${styles.profileCard}`}><div className={styles.profileIntro}><span className={styles.profileAvatar}>{review.member.name.charAt(0)}</span><div><h2>{review.member.projectRole}</h2><p>{review.member.bio}</p></div><StatusBadge {...memberStatusBadge(review.member.progressStatus)} /></div><div className={styles.profileGrid}><div><h3>Technical skills</h3><p className={styles.chipList}>{review.member.technicalSkills.map((skill) => <span key={skill}>{skill}</span>)}</p></div><div><h3>Responsibilities</h3><ul>{review.member.responsibilities.map((responsibility) => <li key={responsibility}>{responsibility}</li>)}</ul></div><div><h3>Activity</h3><p>{review.member.updateCount} updates · Last update {formatDate(review.member.lastUpdateAt)}</p></div></div>{review.member.professionalLinks && Object.values(review.member.professionalLinks).some(Boolean) && <div className={styles.profileLinks}><h3>Professional links</h3><div>{review.member.professionalLinks.linkedIn && <a href={review.member.professionalLinks.linkedIn} target="_blank" rel="noreferrer"><BriefcaseBusiness size={16} />LinkedIn</a>}{review.member.professionalLinks.github && <a href={review.member.professionalLinks.github} target="_blank" rel="noreferrer"><Code2 size={16} />GitHub</a>}{review.member.professionalLinks.portfolio && <a href={review.member.professionalLinks.portfolio} target="_blank" rel="noreferrer"><Globe2 size={16} />Portfolio</a>}</div></div>}</section>
       <section className={`card ${styles.timelinePanel}`}><div className={styles.sectionHeading}><div><h2>Contribution timeline</h2><p>Technical work, evidence, and next steps.</p></div></div><div className={styles.updateList}>{review.updates.map((update) => <UpdateItem key={update.id} update={update} expanded />)}</div></section>

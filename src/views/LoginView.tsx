@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
@@ -72,12 +72,89 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const selectRole = (role: AccountRole, nextMode: 'login' | 'register' = 'register') => {
+  const selectRole = (role: AccountRole, nextMode: 'login' | 'register' = 'register', pushHistory = true) => {
     setSelectedRole(role);
     setMode(nextMode);
     setError(null);
     setSuccessMsg(null);
+    if (pushHistory) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('auth', nextMode);
+      url.searchParams.set('role', role);
+      window.history.pushState({ authMode: nextMode, role }, '', url.toString());
+    }
   };
+
+  const switchMode = (nextMode: 'login' | 'register') => {
+    setMode(nextMode);
+    setError(null);
+    const url = new URL(window.location.href);
+    url.searchParams.set('auth', nextMode);
+    url.searchParams.set('role', selectedRole);
+    window.history.pushState({ authMode: nextMode, role: selectedRole }, '', url.toString());
+  };
+
+  const handleBackToLanding = () => {
+    if (window.history.state && window.history.state.authMode && window.history.state.authMode !== 'landing') {
+      window.history.back();
+    } else {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('auth');
+      url.searchParams.delete('role');
+      window.history.pushState({ authMode: 'landing' }, '', url.pathname + (url.search ? url.search : ''));
+      setMode('landing');
+      setError(null);
+      setSuccessMsg(null);
+    }
+  };
+
+  const clearAuthUrl = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('auth');
+    url.searchParams.delete('role');
+    window.history.replaceState(null, '', url.pathname);
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authParam = params.get('auth');
+    const roleParam = params.get('role');
+    if (
+      (authParam === 'login' || authParam === 'register') &&
+      (roleParam === 'member' || roleParam === 'mentor' || roleParam === 'admin')
+    ) {
+      setMode(authParam as AuthMode);
+      setSelectedRole(roleParam as AccountRole);
+      window.history.replaceState({ authMode: 'landing' }, '', window.location.pathname);
+      window.history.pushState({ authMode: authParam, role: roleParam }, '', window.location.href);
+    } else {
+      window.history.replaceState({ authMode: 'landing' }, '', window.location.href);
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+      const currentParams = new URLSearchParams(window.location.search);
+      const currentAuth = currentParams.get('auth');
+      const currentRole = currentParams.get('role');
+
+      if (state && (state.authMode === 'login' || state.authMode === 'register')) {
+        setMode(state.authMode);
+        if (state.role) setSelectedRole(state.role);
+      } else if (currentAuth === 'login' || currentAuth === 'register') {
+        setMode(currentAuth as AuthMode);
+        if (currentRole === 'member' || currentRole === 'mentor' || currentRole === 'admin') {
+          setSelectedRole(currentRole as AccountRole);
+        }
+      } else {
+        setMode('landing');
+      }
+      setError(null);
+      setSuccessMsg(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -93,6 +170,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         password,
         expectedRole: selectedRole,
       });
+      clearAuthUrl();
       onLoginSuccess(response.user, selectedRole);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Login failed. Please check your credentials.');
@@ -118,12 +196,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       });
       if (response.requiresEmailConfirmation) {
         setSuccessMsg('Check your email to confirm your account, then sign in.');
-        setMode('login');
+        switchMode('login');
         setEmail(regEmail.trim());
         setPassword('');
         return;
       }
-      if (response.user) onLoginSuccess(response.user, selectedRole);
+      if (response.user) {
+        clearAuthUrl();
+        onLoginSuccess(response.user, selectedRole);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Registration failed.');
     } finally {
@@ -218,7 +299,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const RoleIcon = role.icon;
   return (
     <main className="authPage">
-      <button type="button" className="authBack" onClick={() => { setMode('landing'); setError(null); setSuccessMsg(null); }}><ArrowLeft size={17} /> Back</button>
+      <button type="button" className="authBack" onClick={handleBackToLanding} aria-label="Go back to workspace selection">
+        <ArrowLeft size={17} /> Back
+      </button>
       <section className="authLayout">
         <aside className="authIntro">
           <div className="welcomeBrand"><span className="welcomeBrandMark"><Code2 size={21} /></span><strong>TeamTrack</strong></div>
@@ -240,8 +323,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           <h2>{mode === 'login' ? 'Welcome back' : `Create your ${role.label.toLowerCase()} account`}</h2>
           <p className="authPanelDescription">{mode === 'login' ? 'Sign in to continue to your workspace.' : 'Use your email address to get started.'}</p>
           <div className="authModeTabs" role="tablist" aria-label="Authentication mode">
-            <button type="button" role="tab" aria-selected={mode === 'login'} className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setError(null); }}>Sign in</button>
-            <button type="button" role="tab" aria-selected={mode === 'register'} className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setError(null); }}>
+            <button type="button" role="tab" aria-selected={mode === 'login'} className={mode === 'login' ? 'active' : ''} onClick={() => switchMode('login')}>Sign in</button>
+            <button type="button" role="tab" aria-selected={mode === 'register'} className={mode === 'register' ? 'active' : ''} onClick={() => switchMode('register')}>
               {selectedRole === 'member' ? 'Join as member' : 'Create account'}
             </button>
           </div>
@@ -276,7 +359,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </button>
             </form>
           )}
-          <button type="button" className="switchRole" onClick={() => { setMode('landing'); setError(null); }}>Not a {role.label.toLowerCase()}? Choose another workspace</button>
+          <button type="button" className="switchRole" onClick={handleBackToLanding}>Not a {role.label.toLowerCase()}? Choose another workspace</button>
         </section>
       </section>
     </main>

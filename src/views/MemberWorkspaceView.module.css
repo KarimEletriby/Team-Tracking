@@ -42,3 +42,7 @@
 .socialLinkBtn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-surface-subtle); color: var(--primary); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
 .socialLinkBtn:hover { background: var(--primary-light); }
 @media (max-width: 640px) { .drawer { padding: 20px; }.drawerActions { flex-direction: column-reverse; }.drawerActions button { justify-content: center; }.sectionHeading { align-items: stretch; flex-direction: column; }.updateActions { margin-left: 0; width: 100%; }.updateActions > :first-child { flex: 1; justify-content: center; } }
+
+.labelText { color: var(--text-main) !important; font-size: .94rem !important; font-weight: 650 !important; }
+.requiredStar { color: #dc2626 !important; margin-left: 3px; font-weight: 700; }
+.fieldHint { color: var(--text-muted) !important; font-size: .82rem !important; font-weight: 500 !important; margin-left: 4px; }

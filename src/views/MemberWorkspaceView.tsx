@@ -124,15 +124,42 @@ function ProfileEditor({
 
   const drawerRef = useDrawerAccessibility(onClose, returnFocusTarget);
 
+  const cleanSkills = skillsText.split(',').map((value) => value.trim()).filter(Boolean);
+  const cleanResponsibilities = responsibilitiesText.split('\n').map((value) => value.trim()).filter(Boolean);
+
+  const isFormValid = Boolean(
+    projectRole.trim() &&
+    bio.trim() &&
+    cleanSkills.length > 0 &&
+    cleanResponsibilities.length > 0
+  );
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!projectRole.trim()) {
+      setError('Project role is required.');
+      return;
+    }
+    if (!bio.trim()) {
+      setError('About you (bio) is required.');
+      return;
+    }
+    if (cleanSkills.length === 0) {
+      setError('At least one technical skill is required.');
+      return;
+    }
+    if (cleanResponsibilities.length === 0) {
+      setError('At least one responsibility is required.');
+      return;
+    }
+
     setSaving(true); setError(null);
     try {
       const input: MemberProfileInput = {
         projectRole: projectRole.trim(),
         bio: bio.trim(),
-        technicalSkills: skillsText.split(',').map((value) => value.trim()).filter(Boolean),
-        responsibilities: responsibilitiesText.split('\n').map((value) => value.trim()).filter(Boolean),
+        technicalSkills: cleanSkills,
+        responsibilities: cleanResponsibilities,
         professionalLinks: { linkedIn, github, portfolio },
       };
       const saved = await repository.updateProfile(memberId, input);
@@ -148,12 +175,74 @@ function ProfileEditor({
       <div className={styles.drawerHeader}><div><p className={styles.eyebrow}>My profile</p><h2 id="edit-profile-title">Edit profile</h2></div><button type="button" className="btn btn-secondary btn-icon" onClick={onClose} aria-label="Close profile editor"><X size={18} /></button></div>
       <form className={styles.form} onSubmit={(event) => void submit(event)}>
         {error && <p className={styles.formError}><AlertCircle size={16} />{error}</p>}
-        <label className={styles.fieldLabel}>Project role<input className="form-control" value={projectRole} onChange={(event) => setProjectRole(event.target.value)} placeholder="e.g. Frontend developer" autoFocus /></label>
-        <label className={styles.fieldLabel}>About you<textarea className="form-control" rows={4} value={bio} onChange={(event) => setBio(event.target.value)} placeholder="Describe how you contribute to the project." /></label>
-        <label className={styles.fieldLabel}>Technical skills <span>Separate skills with commas.</span><input className="form-control" value={skillsText} onChange={(event) => setSkillsText(event.target.value)} placeholder="React, TypeScript, CSS" /></label>
-        <label className={styles.fieldLabel}>Responsibilities <span>Use one line for each responsibility.</span><textarea className="form-control" rows={4} value={responsibilitiesText} onChange={(event) => setResponsibilitiesText(event.target.value)} placeholder={'Dashboard screens\nDesign system consistency'} /></label>
-        <fieldset className={styles.linksFieldset}><legend>Professional links <span>All optional — shared with your mentor.</span></legend><label className={styles.fieldLabel}>LinkedIn profile<input type="url" className="form-control" value={linkedIn} onChange={(event) => setLinkedIn(event.target.value)} placeholder="https://linkedin.com/in/your-name" /></label><label className={styles.fieldLabel}>GitHub profile<input type="url" className="form-control" value={github} onChange={(event) => setGithub(event.target.value)} placeholder="https://github.com/your-name" /></label><label className={styles.fieldLabel}>Portfolio website<input type="url" className="form-control" value={portfolio} onChange={(event) => setPortfolio(event.target.value)} placeholder="https://your-portfolio.com" /></label></fieldset>
-        <div className={styles.drawerActions}><button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="btn btn-primary" disabled={saving}><Pencil size={16} />Save profile</button></div>
+        <label className={styles.fieldLabel}>
+          <span className={styles.labelText}>Project role <strong className={styles.requiredStar}>*</strong></span>
+          <input 
+            className="form-control" 
+            value={projectRole} 
+            onChange={(event) => { setProjectRole(event.target.value); setError(null); }} 
+            placeholder="e.g. Frontend developer" 
+            required 
+            autoFocus 
+          />
+        </label>
+        <label className={styles.fieldLabel}>
+          <span className={styles.labelText}>About you <strong className={styles.requiredStar}>*</strong></span>
+          <textarea 
+            className="form-control" 
+            rows={4} 
+            value={bio} 
+            onChange={(event) => { setBio(event.target.value); setError(null); }} 
+            placeholder="Describe how you contribute to the project." 
+            required 
+          />
+        </label>
+        <label className={styles.fieldLabel}>
+          <span className={styles.labelText}>
+            Technical skills <strong className={styles.requiredStar}>*</strong>
+            <span className={styles.fieldHint}>Separate skills with commas.</span>
+          </span>
+          <input 
+            className="form-control" 
+            value={skillsText} 
+            onChange={(event) => { setSkillsText(event.target.value); setError(null); }} 
+            placeholder="React, TypeScript, CSS" 
+            required 
+          />
+        </label>
+        <label className={styles.fieldLabel}>
+          <span className={styles.labelText}>
+            Responsibilities <strong className={styles.requiredStar}>*</strong>
+            <span className={styles.fieldHint}>Use one line for each responsibility.</span>
+          </span>
+          <textarea 
+            className="form-control" 
+            rows={4} 
+            value={responsibilitiesText} 
+            onChange={(event) => { setResponsibilitiesText(event.target.value); setError(null); }} 
+            placeholder={'Dashboard screens\nDesign system consistency'} 
+            required 
+          />
+        </label>
+        <fieldset className={styles.linksFieldset}>
+          <legend>Professional links <span>All optional — shared with your mentor.</span></legend>
+          <label className={styles.fieldLabel}>LinkedIn profile<input type="url" className="form-control" value={linkedIn} onChange={(event) => setLinkedIn(event.target.value)} placeholder="https://linkedin.com/in/your-name" /></label>
+          <label className={styles.fieldLabel}>GitHub profile<input type="url" className="form-control" value={github} onChange={(event) => setGithub(event.target.value)} placeholder="https://github.com/your-name" /></label>
+          <label className={styles.fieldLabel}>Portfolio website<input type="url" className="form-control" value={portfolio} onChange={(event) => setPortfolio(event.target.value)} placeholder="https://your-portfolio.com" /></label>
+        </fieldset>
+        <div className={styles.drawerActions}>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <button 
+            type="submit" 
+            className="btn btn-primary" 
+            disabled={saving || !isFormValid}
+            title={!isFormValid ? 'Please fill in all 4 required fields to save profile' : undefined}
+          >
+            <Pencil size={16} />Save profile
+          </button>
+        </div>
       </form>
     </section>
   </div>;

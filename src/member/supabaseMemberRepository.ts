@@ -167,14 +167,23 @@ export class SupabaseMemberRepository implements MemberRepository {
 
   async updateProfile(memberId: MemberEntityId, input: MemberProfileInput): Promise<MemberProfile | null> {
     const authUser = await this.requireCurrentMember(memberId);
+    const projectRole = input.projectRole.trim();
+    const bio = input.bio.trim();
+    const technicalSkills = cleanStringList(input.technicalSkills);
+    const responsibilities = cleanStringList(input.responsibilities);
+
+    if (!projectRole || !bio || technicalSkills.length === 0 || responsibilities.length === 0) {
+      throw new Error('Project role, about you (bio), technical skills, and responsibilities are all required.');
+    }
+
     const client = requireSupabase();
     const { error } = await client
       .from('member_profiles')
       .update({
-        project_role: input.projectRole.trim(),
-        bio: input.bio.trim(),
-        technical_skills: cleanStringList(input.technicalSkills),
-        responsibilities: cleanStringList(input.responsibilities),
+        project_role: projectRole,
+        bio: bio,
+        technical_skills: technicalSkills,
+        responsibilities: responsibilities,
         social_links: cleanProfessionalLinks(input.professionalLinks),
       })
       .eq('user_id', memberId);

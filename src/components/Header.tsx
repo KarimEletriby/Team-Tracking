@@ -5,14 +5,29 @@ interface HeaderProps {
   currentUser: User;
   title: string;
   subtitle?: string;
+  activeWorkspace?: 'admin' | 'mentor' | 'member';
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentUser,
   title,
-  subtitle
+  subtitle,
+  activeWorkspace
 }) => {
+  const isAdmin = currentUser.role === 'admin';
   const isMentor = currentUser.role === 'mentor';
+
+  const getAvatarBg = () => {
+    if (isAdmin) return activeWorkspace === 'mentor' ? 'var(--primary)' : '#7c3aed';
+    if (isMentor) return 'var(--primary)';
+    return '#059669';
+  };
+
+  const getRoleTitle = () => {
+    if (isAdmin) return activeWorkspace === 'mentor' ? 'Admin (Mentor Mode)' : 'System Administrator';
+    if (isMentor) return 'Supervisor';
+    return 'Team Member';
+  };
 
   return (
     <header className="top-header" style={{
@@ -41,7 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
             width: '32px',
             height: '32px',
             borderRadius: '50%',
-            backgroundColor: isMentor ? 'var(--primary)' : '#059669',
+            backgroundColor: getAvatarBg(),
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -56,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
               {currentUser.name}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {isMentor ? 'Supervisor' : 'Team Member'}
+              {getRoleTitle()}
             </div>
           </div>
         </div>

@@ -14,6 +14,8 @@ import { User as UserType } from '../types';
 interface SidebarProps {
   currentUser: UserType;
   currentView: string;
+  activeWorkspace?: 'admin' | 'mentor' | 'member';
+  onSwitchWorkspace?: (workspace: 'admin' | 'mentor') => void;
   onNavigate: (view: string, payload?: any) => void;
   onLogout: () => void;
 }
@@ -21,10 +23,29 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
   currentView,
+  activeWorkspace = 'admin',
+  onSwitchWorkspace,
   onNavigate,
   onLogout
 }) => {
+  const isAdmin = currentUser.role === 'admin';
   const isMentor = currentUser.role === 'mentor';
+
+  const getRoleLabel = () => {
+    if (isAdmin) {
+      return activeWorkspace === 'mentor' ? 'Admin (Mentor Mode)' : 'System Admin';
+    }
+    if (isMentor) return 'Mentor System';
+    return 'Member Portal';
+  };
+
+  const getAvatarBg = () => {
+    if (isAdmin) {
+      return activeWorkspace === 'mentor' ? 'var(--primary)' : '#7c3aed';
+    }
+    if (isMentor) return 'var(--primary)';
+    return '#059669';
+  };
 
   return (
     <aside className="sidebar" style={{ display: 'flex', flexDirection: 'column', height: '100vh', justifyContent: 'space-between' }}>
@@ -36,21 +57,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
               width: '36px', 
               height: '36px', 
               borderRadius: '8px', 
-              backgroundColor: 'var(--primary)', 
+              backgroundColor: isAdmin ? '#7c3aed' : 'var(--primary)', 
               display: 'flex', 
               alignItems: 'center', 
-              justifyContent: 'center',
+              justifyContent: 'center', 
               color: '#ffffff',
-              boxShadow: '0 2px 8px rgba(37,99,235,0.4)'
+              boxShadow: isAdmin ? '0 2px 8px rgba(124,58,237,0.4)' : '0 2px 8px rgba(37,99,235,0.4)'
             }}>
-              <Code2 size={20} />
+              {isAdmin ? <ShieldCheck size={20} /> : <Code2 size={20} />}
             </div>
             <div>
               <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.01em' }}>
                 TeamTrack
               </div>
               <div style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
-                {isMentor ? 'Mentor System' : 'Member Portal'}
+                {getRoleLabel()}
               </div>
             </div>
           </div>
@@ -70,7 +91,96 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {isMentor ? (
+            {isAdmin && (
+              <>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '4px',
+                  padding: '3px',
+                  marginBottom: '10px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255, 255, 255, 0.08)'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => onSwitchWorkspace?.('admin')}
+                    style={{
+                      padding: '6px 8px',
+                      border: 0,
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      backgroundColor: activeWorkspace === 'admin' ? '#7c3aed' : 'transparent',
+                      color: activeWorkspace === 'admin' ? '#ffffff' : '#94a3b8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <ShieldCheck size={14} /> Admin
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSwitchWorkspace?.('mentor')}
+                    style={{
+                      padding: '6px 8px',
+                      border: 0,
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      backgroundColor: activeWorkspace === 'mentor' ? 'var(--primary)' : 'transparent',
+                      color: activeWorkspace === 'mentor' ? '#ffffff' : '#94a3b8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <LayoutDashboard size={14} /> Mentor
+                  </button>
+                </div>
+
+                {activeWorkspace === 'admin' ? (
+                  <button
+                    id="nav-admin-dashboard"
+                    onClick={() => onNavigate('dashboard')}
+                    className={`sidebar-nav-item ${currentView === 'dashboard' ? 'active' : ''}`}
+                  >
+                    <ShieldCheck size={18} />
+                    <span>Admin Panel</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      id="nav-mentor-dashboard"
+                      onClick={() => onNavigate('dashboard')}
+                      className={`sidebar-nav-item ${currentView === 'dashboard' ? 'active' : ''}`}
+                    >
+                      <LayoutDashboard size={18} />
+                      <span>Mentor Dashboard</span>
+                    </button>
+
+                    <button
+                      id="nav-mentor-teams"
+                      onClick={() => onNavigate('teams')}
+                      className={`sidebar-nav-item ${currentView === 'teams' || currentView === 'team-detail' ? 'active' : ''}`}
+                    >
+                      <Users size={18} />
+                      <span>My Teams</span>
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+
+            {isMentor && (
               <>
                 <button
                   id="nav-mentor-dashboard"
@@ -90,7 +200,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span>Teams</span>
                 </button>
               </>
-            ) : (
+            )}
+
+            {!isAdmin && !isMentor && (
               <>
                 <button
                   id="nav-member-profile"
@@ -99,6 +211,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <User size={18} />
                   <span>My Profile</span>
+                </button>
+
+                <button
+                  id="nav-member-team"
+                  onClick={() => onNavigate('team')}
+                  className={`sidebar-nav-item ${currentView === 'team' ? 'active' : ''}`}
+                >
+                  <Users size={18} />
+                  <span>My Team</span>
                 </button>
 
                 <button
@@ -130,7 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             width: '36px',
             height: '36px',
             borderRadius: '50%',
-            backgroundColor: isMentor ? 'var(--primary)' : '#059669',
+            backgroundColor: getAvatarBg(),
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -153,8 +274,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {currentUser.name}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-              <span className={`badge ${isMentor ? 'badge-blue' : 'badge-green'}`} style={{ fontSize: '0.65rem', padding: '1px 6px' }}>
-                {isMentor ? 'Mentor' : 'Member'}
+              <span
+                className={`badge ${isAdmin ? 'badge-purple' : isMentor ? 'badge-blue' : 'badge-green'}`}
+                style={{
+                  fontSize: '0.65rem',
+                  padding: '1px 6px',
+                  backgroundColor: isAdmin ? '#4c1d95' : undefined,
+                  color: isAdmin ? '#ddd6fe' : undefined,
+                  border: isAdmin ? '1px solid #6d28d9' : undefined
+                }}
+              >
+                {isAdmin ? 'System Admin' : isMentor ? 'Mentor' : 'Member'}
               </span>
             </div>
           </div>

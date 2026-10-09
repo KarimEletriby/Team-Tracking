@@ -143,8 +143,8 @@ function TeamManagementDrawer({
       if (!saved) throw new Error('Team unavailable');
       await onSaved(saved);
       onClose();
-    } catch {
-      setError('The team could not be saved. Please try again.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The team could not be saved. Please try again.');
     } finally { setSaving(false); }
   };
 
@@ -189,10 +189,10 @@ function MemberManagementDrawer({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!isEditing && (!name.trim() || !email.trim() || !projectRole.trim())) { setError('Add the member name, email, and project role.'); return; }
+    if (!isEditing && (!name.trim() || !email.trim())) { setError('Add the member name and email.'); return; }
     setSaving(true); setError(null);
     try {
-      const input: CreateMemberInput = { name: name.trim(), email: email.trim(), projectRole: projectRole.trim() };
+      const input: CreateMemberInput = { name: name.trim(), email: email.trim(), projectRole: projectRole.trim() || 'Team Member' };
       if (member) {
         if (teamId !== member.teamId) {
           const moved = await repository.moveMember(member.id, teamId);
@@ -204,7 +204,7 @@ function MemberManagementDrawer({
       }
       await onSaved(teamId);
       onClose();
-    } catch { setError('The member could not be saved. Please try again.'); }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'The member could not be saved. Please try again.'); }
     finally { setSaving(false); }
   };
 
@@ -216,7 +216,7 @@ function MemberManagementDrawer({
       if (!removed) throw new Error('Member unavailable');
       await onRemoved();
       onClose();
-    } catch { setError('The member could not be removed. Please try again.'); }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'The member could not be removed. Please try again.'); }
     finally { setSaving(false); }
   };
 
@@ -228,7 +228,7 @@ function MemberManagementDrawer({
         {isEditing && <p className={styles.memberManagementNote}>Members manage their own profile details. You can move them between your teams or remove them from this team.</p>}
         <label className={styles.fieldLabel}>Full name<input className="form-control" value={name} onChange={(event) => setName(event.target.value)} autoFocus readOnly={isEditing} /></label>
         <label className={styles.fieldLabel}>Email address<input type="email" className="form-control" value={email} onChange={(event) => setEmail(event.target.value)} readOnly={isEditing} /></label>
-        <label className={styles.fieldLabel}>Project role<input className="form-control" value={projectRole} onChange={(event) => setProjectRole(event.target.value)} placeholder="e.g. Frontend developer" readOnly={isEditing} /></label>
+        <label className={styles.fieldLabel}>Project role <span>Optional — member can set or edit their own role</span><input className="form-control" value={projectRole} onChange={(event) => setProjectRole(event.target.value)} placeholder="e.g. Frontend developer (or leave for member to set)" readOnly={isEditing} /></label>
         <label className={styles.fieldLabel}>Team<select className="form-control" value={teamId} onChange={(event) => setTeamId(event.target.value)}>{teams.map((teamOption) => <option key={teamOption.id} value={teamOption.id}>{teamOption.name}</option>)}</select></label>
         <div className={styles.drawerActions}>{isEditing && <button type="button" className={styles.dangerButton} onClick={() => void remove()} disabled={saving}><Trash2 size={15} />Remove member</button>}<span className={styles.drawerSpacer} /><button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="btn btn-primary" disabled={saving}><Save size={15} />{isEditing ? 'Save team assignment' : 'Add member'}</button></div>
       </form>

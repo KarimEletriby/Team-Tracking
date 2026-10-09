@@ -54,9 +54,23 @@ export interface MemberEvidenceFile {
   dataUrl: string;
 }
 
+export interface MemberTeammateProfile {
+  id: MemberEntityId;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+  projectRole: string;
+  bio: string;
+  technicalSkills: string[];
+  responsibilities: string[];
+  professionalLinks: MemberProfessionalLinks;
+  joinedAt: MemberISODateString;
+}
+
 export interface MemberHomeData {
   member: MemberProfile;
   project: MemberProjectContext;
+  teammates: MemberTeammateProfile[];
   latestUpdate: MemberWorkUpdate | null;
   updateCount: number;
 }

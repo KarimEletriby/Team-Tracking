@@ -227,5 +227,6 @@ Deno.serve(async (request) => {
   return json(201, {
     success: true,
     teamId: ownedTeam.id,
+    memberId: targetMemberId,
   });
 });

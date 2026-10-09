@@ -131,5 +131,5 @@ export type UpdateTeamInput = CreateTeamInput;
 export interface CreateMemberInput {
   name: string;
   email: string;
-  projectRole: string;
+  projectRole?: string;
 }

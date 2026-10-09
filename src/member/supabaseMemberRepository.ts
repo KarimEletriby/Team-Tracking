@@ -154,9 +154,12 @@ export class SupabaseMemberRepository implements MemberRepository {
     ]);
 
     if (!profile || !memberProfile) return null;
+    const teammates = project.teamId ? await this.getTeammates(project.teamId, memberId) : [];
+
     return {
       member: this.toMemberProfile(profile, memberProfile, authUser.email ?? ''),
       project,
+      teammates,
       latestUpdate: updates[0] ?? null,
       updateCount: updates.length,
     };
@@ -327,6 +330,44 @@ export class SupabaseMemberRepository implements MemberRepository {
       projectName: team.project_name,
       projectGoal: team.project_goal,
     };
+  }
+
+  async getTeammates(teamId: string, _currentMemberId: string): Promise<any[]> {
+    if (!teamId) return [];
+    const client = requireSupabase();
+
+    const { data: tmData, error: tmError } = await client
+      .from('team_members')
+      .select('member_id, joined_at')
+      .eq('team_id', teamId);
+    if (tmError || !tmData || tmData.length === 0) return [];
+
+    const memberIds = tmData.map((x) => x.member_id);
+
+    const [profilesResult, memberProfilesResult] = await Promise.all([
+      client.from('profiles').select('id, full_name, email, avatar_url, created_at').in('id', memberIds),
+      client.from('member_profiles').select('user_id, project_role, bio, technical_skills, responsibilities, social_links').in('user_id', memberIds),
+    ]);
+
+    const profiles = new Map(((profilesResult.data ?? []) as any[]).map((p) => [p.id, p]));
+    const memberProfiles = new Map(((memberProfilesResult.data ?? []) as any[]).map((p) => [p.user_id, p]));
+
+    return tmData.map((tm) => {
+      const p = profiles.get(tm.member_id);
+      const mp = memberProfiles.get(tm.member_id);
+      return {
+        id: tm.member_id,
+        name: p?.full_name || p?.email?.split('@')[0] || 'Team member',
+        email: p?.email || '',
+        avatarUrl: p?.avatar_url ?? undefined,
+        projectRole: mp?.project_role || 'Team Member',
+        bio: mp?.bio || '',
+        technicalSkills: mp?.technical_skills ?? [],
+        responsibilities: mp?.responsibilities ?? [],
+        professionalLinks: toProfessionalLinks(mp?.social_links),
+        joinedAt: tm.joined_at,
+      };
+    });
   }
 
   private toMemberProfile(profile: ProfileRow, memberProfile: MemberProfileRow, email: string): MemberProfile {

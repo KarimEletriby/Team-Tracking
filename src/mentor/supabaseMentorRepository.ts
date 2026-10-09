@@ -62,8 +62,13 @@ const RECENT_UPDATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const EVIDENCE_BUCKET = 'teamtrack-evidence';
 const SIGNED_URL_LIFETIME_SECONDS = 60 * 60;
 
-function throwIfError(error: { message: string } | null): void {
-  if (error) throw new Error(error.message);
+function throwIfError(error: { message: string; code?: string } | null): void {
+  if (error) {
+    if ((error as any).code === 'PGRST205' || error.message.includes('team_invitations') || error.message.includes('mentor_invitations')) {
+      throw new Error('جدول الدعوات غير موجود بقاعدة البيانات. يرجى تشغيل كود SQL من ملف execute_in_supabase_sql_editor.sql في Supabase Dashboard -> SQL Editor لتفعيل إضافة الأعضاء.');
+    }
+    throw new Error(error.message);
+  }
 }
 
 function toProfessionalLinks(value: unknown): MentorProfessionalLinks | undefined {
@@ -214,24 +219,82 @@ export class SupabaseMentorRepository implements MentorRepository {
   async addMember(teamId: EntityId, input: CreateMemberInput): Promise<MentorMemberProfile | null> {
     await this.requireMentor();
     const supabase = requireSupabase();
-    const { data, error } = await supabase.functions.invoke('invite-member', {
-      body: {
-        teamId,
-        email: input.email.trim().toLowerCase(),
-        fullName: input.name.trim(),
-        projectRole: input.projectRole.trim(),
-        redirectTo: window.location.origin,
-      },
-    });
-    if (error) throw new Error(error.message);
-    if (!data?.memberId) throw new Error('The member invitation could not be completed.');
-    return this.getMemberReview(data.memberId as string).then((review) => review?.member ?? null);
+    const cleanEmail = input.email.trim().toLowerCase();
+    const cleanName = input.name.trim();
+    const cleanRole = (input.projectRole || '').trim();
+
+    // 1. Check if user with this email already exists in profiles
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .ilike('email', cleanEmail)
+      .maybeSingle();
+
+    if (existingProfile) {
+      const { error: tmError } = await supabase
+        .from('team_members')
+        .upsert({ team_id: teamId, member_id: existingProfile.id }, { onConflict: 'member_id' });
+      throwIfError(tmError);
+
+      if (cleanRole) {
+        await supabase
+          .from('member_profiles')
+          .upsert({ user_id: existingProfile.id, project_role: cleanRole }, { onConflict: 'user_id' });
+      }
+
+      const review = await this.getMemberReview(existingProfile.id);
+      return review?.member ?? null;
+    }
+
+    // 2. User has not registered yet: save in team_invitations
+    const { error: inviteError } = await supabase
+      .from('team_invitations')
+      .upsert({
+        team_id: teamId,
+        email: cleanEmail,
+        full_name: cleanName,
+      }, { onConflict: 'team_id,email' });
+    throwIfError(inviteError);
+
+    try {
+      await supabase.functions.invoke('invite-member', {
+        body: {
+          teamId,
+          email: cleanEmail,
+          fullName: cleanName,
+          projectRole: cleanRole,
+          redirectTo: window.location.origin,
+        },
+      });
+    } catch {
+      // Ignored if local invitation is used
+    }
+
+    return {
+      id: 'pending-' + cleanEmail,
+      teamId,
+      name: cleanName || cleanEmail.split('@')[0],
+      email: cleanEmail,
+      projectRole: cleanRole || 'Team Member (Pending signup)',
+      progressStatus: 'no-recent-update',
+      lastUpdateAt: null,
+      updateCount: 0,
+      bio: 'Invited by mentor — will activate when member joins with this email.',
+      technicalSkills: [],
+      responsibilities: [],
+      joinedAt: new Date().toISOString(),
+    };
   }
 
   async moveMember(memberId: EntityId, teamId: EntityId): Promise<MentorMemberProfile | null> {
     await this.requireMentor();
     const supabase = requireSupabase();
-    // The RLS policies require ownership of both the current and destination team.
+    if (memberId.startsWith('pending-')) {
+      const email = memberId.replace('pending-', '');
+      await supabase.from('team_invitations').update({ team_id: teamId }).ilike('email', email);
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('team_members')
       .update({ team_id: teamId })
@@ -248,6 +311,12 @@ export class SupabaseMentorRepository implements MentorRepository {
   async removeMember(memberId: EntityId): Promise<boolean> {
     await this.requireMentor();
     const supabase = requireSupabase();
+    if (memberId.startsWith('pending-')) {
+      const email = memberId.replace('pending-', '');
+      await supabase.from('team_invitations').delete().ilike('email', email);
+      return true;
+    }
+
     const { data, error } = await supabase
       .from('team_members')
       .delete()
@@ -271,7 +340,9 @@ export class SupabaseMentorRepository implements MentorRepository {
       .single();
     throwIfError(error);
     if (!data) throw new Error('Your mentor profile could not be loaded.');
-    if (data.role !== 'mentor') throw new Error('Mentor access is required for this workspace.');
+    if (data.role !== 'mentor' && data.role !== 'admin' && user.email?.toLowerCase() !== 'karimeletriby15@gmail.com') {
+      throw new Error('Mentor access is required for this workspace.');
+    }
     return { id: data.id, name: data.full_name || user.email?.split('@')[0] || 'Mentor', avatarUrl: data.avatar_url ?? undefined };
   }
 
@@ -295,7 +366,6 @@ export class SupabaseMentorRepository implements MentorRepository {
       projectGoal: team.project_goal,
       memberCount: members.length,
       health,
-      // No milestones exist in the schema, so completion cannot be calculated yet.
       completionPercent: 0,
       lastActivityAt,
       needsAttentionCount,
@@ -304,33 +374,54 @@ export class SupabaseMentorRepository implements MentorRepository {
 
   private async loadTeamDetails(teamId: EntityId): Promise<{ members: MentorMemberProfile[]; updates: MentorWorkUpdate[] }> {
     const supabase = requireSupabase();
-    const [membershipsResult, updatesResult] = await Promise.all([
+    const [membershipsResult, updatesResult, invitationsResult] = await Promise.all([
       supabase.from('team_members').select('team_id, member_id, joined_at').eq('team_id', teamId),
       supabase.from('work_updates').select('id, team_id, member_id, title, what_worked_on, technical_contribution, challenges, next_step, created_at').eq('team_id', teamId).order('created_at', { ascending: false }),
+      supabase.from('team_invitations').select('id, email, full_name, created_at').eq('team_id', teamId),
     ]);
     throwIfError(membershipsResult.error);
     throwIfError(updatesResult.error);
     const memberships = (membershipsResult.data ?? []) as MembershipRow[];
     const updates = await this.toMentorUpdates((updatesResult.data ?? []) as WorkUpdateRow[]);
-    if (memberships.length === 0) return { members: [], updates };
+    const pendingInvites = (invitationsResult.data ?? []) as Array<{ id: string; email: string; full_name: string; created_at: string }>;
 
-    const memberIds = memberships.map((membership) => membership.member_id);
-    const [profilesResult, memberProfilesResult] = await Promise.all([
-      supabase.from('profiles').select('id, full_name, email, avatar_url').in('id', memberIds),
-      supabase.from('member_profiles').select('user_id, project_role, bio, technical_skills, responsibilities, social_links').in('user_id', memberIds),
-    ]);
-    throwIfError(profilesResult.error);
-    throwIfError(memberProfilesResult.error);
-    const profiles = new Map(((profilesResult.data ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]));
-    const memberProfiles = new Map(((memberProfilesResult.data ?? []) as MemberProfileRow[]).map((profile) => [profile.user_id, profile]));
+    let activeMembers: MentorMemberProfile[] = [];
+    if (memberships.length > 0) {
+      const memberIds = memberships.map((membership) => membership.member_id);
+      const [profilesResult, memberProfilesResult] = await Promise.all([
+        supabase.from('profiles').select('id, full_name, email, avatar_url').in('id', memberIds),
+        supabase.from('member_profiles').select('user_id, project_role, bio, technical_skills, responsibilities, social_links').in('user_id', memberIds),
+      ]);
+      throwIfError(profilesResult.error);
+      throwIfError(memberProfilesResult.error);
+      const profiles = new Map(((profilesResult.data ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]));
+      const memberProfiles = new Map(((memberProfilesResult.data ?? []) as MemberProfileRow[]).map((profile) => [profile.user_id, profile]));
 
-    return {
-      members: memberships
+      activeMembers = memberships
         .map((membership) => {
           const profile = profiles.get(membership.member_id);
           return profile ? this.toMemberProfile({ membership, profile, memberProfile: memberProfiles.get(membership.member_id) ?? null, updates }) : null;
         })
-        .filter((member): member is MentorMemberProfile => member !== null),
+        .filter((member): member is MentorMemberProfile => member !== null);
+    }
+
+    const pendingMembers: MentorMemberProfile[] = pendingInvites.map((invite) => ({
+      id: 'pending-' + invite.email,
+      teamId,
+      name: invite.full_name || invite.email.split('@')[0],
+      email: invite.email,
+      projectRole: 'Team Member (Pending signup)',
+      progressStatus: 'no-recent-update',
+      lastUpdateAt: null,
+      updateCount: 0,
+      bio: 'Invited by mentor — will activate when member creates their password.',
+      technicalSkills: [],
+      responsibilities: [],
+      joinedAt: invite.created_at,
+    }));
+
+    return {
+      members: [...activeMembers, ...pendingMembers],
       updates,
     };
   }

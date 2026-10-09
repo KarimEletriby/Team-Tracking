@@ -1,5 +1,21 @@
 import { FormEvent, RefObject, useEffect, useRef, useState } from 'react';
-import { AlertCircle, Edit3, FilePlus2, Paperclip, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import {
+  AlertCircle,
+  BriefcaseBusiness,
+  Code2,
+  Edit3,
+  Eye,
+  FilePlus2,
+  Globe2,
+  Paperclip,
+  Pencil,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  Users,
+  X,
+} from 'lucide-react';
 import { EmptyState, LoadingState, PageHeader, Toast } from '../components/mentor';
 import { ProfileCompletionPrompt, ProfileSummaryCard, UpdateCard, UpdatesEmptyState } from '../components/member';
 import {
@@ -7,12 +23,13 @@ import {
   MemberEvidenceFile,
   MemberProfileInput,
   MemberRepository,
+  MemberTeammateProfile,
   MemberWorkUpdate,
   MemberWorkUpdateInput,
 } from '../member';
 import styles from './MemberWorkspaceView.module.css';
 
-type MemberSection = 'profile' | 'updates';
+type MemberSection = 'profile' | 'team' | 'updates';
 
 interface MemberWorkspaceViewProps {
   memberId: string;
@@ -122,7 +139,7 @@ function ProfileEditor({
       if (!saved) throw new Error('Profile unavailable');
       await onSaved();
       onClose();
-    } catch { setError('Your profile could not be saved. Please try again.'); }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Your profile could not be saved. Please try again.'); }
     finally { setSaving(false); }
   };
 
@@ -190,7 +207,7 @@ function UpdateEditor({
       if (!saved) throw new Error('Update unavailable');
       await onSaved(isEditing ? 'updated' : 'created');
       onClose();
-    } catch { setError('Your update could not be saved. Please try again.'); }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Your update could not be saved. Please try again.'); }
     finally { setSaving(false); }
   };
 
@@ -205,7 +222,7 @@ function UpdateEditor({
       setIsReadingFile(true);
       const dataUrl = await readFileAsDataUrl(file);
       setEvidenceFile({ fileName: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size, dataUrl });
-    } catch { setError('The file could not be added. Please try again.'); }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'The file could not be added. Please try again.'); }
     finally { setIsReadingFile(false); }
   };
 
@@ -232,6 +249,103 @@ function UpdateEditor({
   </div>;
 }
 
+function TeammateProfileDrawer({
+  teammate,
+  onClose,
+}: {
+  teammate: MemberTeammateProfile;
+  onClose: () => void;
+}) {
+  return (
+    <div className={styles.drawerOverlay} role="presentation" onMouseDown={onClose}>
+      <section className={styles.drawer} role="dialog" aria-modal="true" aria-labelledby="teammate-profile-title" onMouseDown={(e) => e.stopPropagation()}>
+        <div className={styles.drawerHeader}>
+          <div>
+            <p className={styles.eyebrow}>Team Member</p>
+            <h2 id="teammate-profile-title">{teammate.name}</h2>
+          </div>
+          <button type="button" className="btn btn-secondary btn-icon" onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ padding: '20px 0' }}>
+          <div className={styles.readOnlyBanner}>
+            <ShieldCheck size={16} />
+            <span>Teammate profile (Read-only view)</span>
+          </div>
+          <div className={styles.teammateHeader}>
+            <div className={styles.avatar}>{teammate.name.charAt(0).toUpperCase()}</div>
+            <div className={styles.teammateMeta}>
+              <strong>{teammate.name}</strong>
+              <small>{teammate.projectRole || 'Team Member'} · {teammate.email}</small>
+            </div>
+          </div>
+
+          <div className={styles.detailSection}>
+            <h4>Role in Project</h4>
+            <p>{teammate.projectRole || 'Not specified yet'}</p>
+          </div>
+
+          {teammate.bio && (
+            <div className={styles.detailSection}>
+              <h4>About</h4>
+              <p>{teammate.bio}</p>
+            </div>
+          )}
+
+          {teammate.technicalSkills.length > 0 && (
+            <div className={styles.detailSection}>
+              <h4>Technical Skills</h4>
+              <div className={styles.skillsList}>
+                {teammate.technicalSkills.map((skill) => (
+                  <span key={skill} className={styles.skillChip}>{skill}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {teammate.responsibilities.length > 0 && (
+            <div className={styles.detailSection}>
+              <h4>Responsibilities</h4>
+              <ul>
+                {teammate.responsibilities.map((resp) => (
+                  <li key={resp}>{resp}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {teammate.professionalLinks && Object.values(teammate.professionalLinks).some(Boolean) && (
+            <div className={styles.detailSection}>
+              <h4>Professional Links</h4>
+              <div className={styles.socialLinksRow}>
+                {teammate.professionalLinks.linkedIn && (
+                  <a href={teammate.professionalLinks.linkedIn} target="_blank" rel="noreferrer" className={styles.socialLinkBtn}>
+                    <BriefcaseBusiness size={14} /> LinkedIn
+                  </a>
+                )}
+                {teammate.professionalLinks.github && (
+                  <a href={teammate.professionalLinks.github} target="_blank" rel="noreferrer" className={styles.socialLinkBtn}>
+                    <Code2 size={14} /> GitHub
+                  </a>
+                )}
+                {teammate.professionalLinks.portfolio && (
+                  <a href={teammate.professionalLinks.portfolio} target="_blank" rel="noreferrer" className={styles.socialLinkBtn}>
+                    <Globe2 size={14} /> Portfolio
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className={styles.drawerActions}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function MemberWorkspaceView({ memberId, memberName, externalView, onSectionChange, repository }: MemberWorkspaceViewProps) {
   const [section, setSection] = useState<MemberSection>('profile');
   const [home, setHome] = useState<MemberHomeData | null>(null);
@@ -240,6 +354,7 @@ export function MemberWorkspaceView({ memberId, memberName, externalView, onSect
   const [error, setError] = useState<string | null>(null);
   const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
   const [updateToEdit, setUpdateToEdit] = useState<MemberWorkUpdate | null | undefined>(undefined);
+  const [selectedTeammate, setSelectedTeammate] = useState<MemberTeammateProfile | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const drawerTriggerRef = useRef<HTMLElement | null>(null);
@@ -255,7 +370,7 @@ export function MemberWorkspaceView({ memberId, memberName, externalView, onSect
   };
   useEffect(() => { void loadMemberData(); }, [memberId, repository]);
   useEffect(() => {
-    if (externalView === 'profile' || externalView === 'updates') setSection(externalView);
+    if (externalView === 'profile' || externalView === 'updates' || externalView === 'team') setSection(externalView as MemberSection);
   }, [externalView]);
 
   const goTo = (nextSection: MemberSection) => { setSection(nextSection); onSectionChange?.(nextSection); };
@@ -281,8 +396,74 @@ export function MemberWorkspaceView({ memberId, memberName, externalView, onSect
   const renderProfile = () => <>
     <PageHeader eyebrow="Member workspace" title="My profile" description="Keep your role and technical context clear for your mentor and team." actions={<><button type="button" className="btn btn-secondary" onClick={(event) => { drawerTriggerRef.current = event.currentTarget; setIsProfileEditorOpen(true); }}><Pencil size={16} />Edit profile</button><button type="button" className="btn btn-primary" onClick={(event) => { drawerTriggerRef.current = event.currentTarget; setUpdateToEdit(null); }}><Plus size={16} />Add update</button></>} />
     {!profileIsComplete && <ProfileCompletionPrompt action={<button type="button" className="btn btn-primary btn-sm" onClick={(event) => { drawerTriggerRef.current = event.currentTarget; setIsProfileEditorOpen(true); }}>Complete profile</button>} />}
-    <ProfileSummaryCard name={memberName} role={home.member.projectRole || 'Role not added yet'} teamName={home.project.teamName} projectName={home.project.projectName} bio={home.member.bio} skills={home.member.technicalSkills} responsibilities={home.member.responsibilities} professionalLinks={home.member.professionalLinks} headerAction={<span className={styles.projectBadge}>My team</span>} />
+    <ProfileSummaryCard name={memberName} role={home.member.projectRole || 'Role not added yet'} teamName={home.project.teamName} projectName={home.project.projectName} bio={home.member.bio} skills={home.member.technicalSkills} responsibilities={home.member.responsibilities} professionalLinks={home.member.professionalLinks} headerAction={<button type="button" className="btn btn-secondary btn-sm" onClick={() => goTo('team')}><Users size={14} />View team</button>} />
     <section className={styles.latestSection}><div className={styles.sectionHeading}><div><h2>Latest update</h2><p>{home.updateCount ? 'Your most recent work shared with the team.' : 'Start documenting your progress.'}</p></div><button type="button" className={styles.textButton} onClick={() => goTo('updates')}>View all updates</button></div>{home.latestUpdate ? <UpdateCard title={home.latestUpdate.title} dateLabel={formatDate(home.latestUpdate.createdAt)} summary={home.latestUpdate.whatWorkedOn} technicalContribution={home.latestUpdate.technicalContribution} nextStep={home.latestUpdate.nextStep} evidenceUrl={home.latestUpdate.evidenceUrl} evidenceFile={home.latestUpdate.evidenceFile} /> : <UpdatesEmptyState action={<button type="button" className="btn btn-primary" onClick={(event) => { drawerTriggerRef.current = event.currentTarget; setUpdateToEdit(null); }}>Add your first update</button>} />}</section>
+  </>;
+
+  const renderTeam = () => <>
+    <PageHeader eyebrow="Member workspace" title={home.project.teamName || 'My Team'} description={`Project: ${home.project.projectName || 'Not assigned'}`} actions={<button type="button" className="btn btn-secondary" onClick={() => goTo('profile')}><Pencil size={15} />My profile</button>} />
+    <div className={styles.projectOverviewCard}>
+      <div className={styles.projectOverviewHeader}>
+        <div>
+          <span className={styles.eyebrow}>PROJECT GOAL</span>
+          <h3>{home.project.projectName}</h3>
+        </div>
+      </div>
+      <p className={styles.projectGoalText}>{home.project.projectGoal || 'No goal specified yet by mentor.'}</p>
+    </div>
+
+    <div className={styles.sectionHeading}>
+      <div>
+        <h2>Team Members ({home.teammates.length})</h2>
+        <p>Explore your teammates' skills, responsibilities, and profiles.</p>
+      </div>
+    </div>
+
+    {home.teammates.length === 0 ? (
+      <EmptyState title="No teammates yet" description="Your mentor has not added other members to this team yet." icon={<Users size={24} />} />
+    ) : (
+      <div className={styles.teamGrid}>
+        {home.teammates.map((teammate) => {
+          const isCurrentUser = teammate.id === memberId;
+          return (
+            <article key={teammate.id} className={styles.teammateCard}>
+              <div className={styles.teammateHeader}>
+                <div className={styles.avatar}>{teammate.name.charAt(0).toUpperCase()}</div>
+                <div className={styles.teammateMeta}>
+                  <strong>
+                    {teammate.name}
+                    {isCurrentUser && <span className={styles.badgeYou}>You</span>}
+                  </strong>
+                  <small>{teammate.projectRole || 'Team Member'}</small>
+                </div>
+              </div>
+
+              {teammate.technicalSkills.length > 0 && (
+                <div className={styles.skillsList}>
+                  {teammate.technicalSkills.slice(0, 3).map((skill) => (
+                    <span key={skill} className={styles.skillChip}>{skill}</span>
+                  ))}
+                  {teammate.technicalSkills.length > 3 && (
+                    <span className={styles.skillChip}>+{teammate.technicalSkills.length - 3}</span>
+                  )}
+                </div>
+              )}
+
+              <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => setSelectedTeammate(teammate)}
+                >
+                  <Eye size={14} /> View profile
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    )}
   </>;
 
   const renderUpdates = () => <>
@@ -292,9 +473,12 @@ export function MemberWorkspaceView({ memberId, memberName, externalView, onSect
 
   return <div className={`page-body ${styles.workspaceRoot}`}>
     {actionError && <p className={styles.actionError} role="alert"><AlertCircle size={17} />{actionError}</p>}
-    {section === 'profile' ? renderProfile() : renderUpdates()}
+    {section === 'profile' && renderProfile()}
+    {section === 'team' && renderTeam()}
+    {section === 'updates' && renderUpdates()}
     {isProfileEditorOpen && <ProfileEditor home={home} repository={repository} memberId={memberId} returnFocusTarget={drawerTriggerRef} onClose={() => setIsProfileEditorOpen(false)} onSaved={async () => { await refreshAfterChange(); setToastMessage('Profile updated successfully.'); }} />}
     {updateToEdit !== undefined && <UpdateEditor update={updateToEdit ?? undefined} repository={repository} memberId={memberId} returnFocusTarget={drawerTriggerRef} onClose={() => setUpdateToEdit(undefined)} onSaved={async (kind) => { await refreshAfterChange(); setToastMessage(kind === 'created' ? 'Update published successfully.' : 'Update updated successfully.'); }} />}
+    {selectedTeammate && <TeammateProfileDrawer teammate={selectedTeammate} onClose={() => setSelectedTeammate(null)} />}
     {toastMessage && <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />}
   </div>;
 }

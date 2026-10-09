@@ -18,5 +18,27 @@
 .projectBadge { background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 999px; color: var(--primary); display: inline-flex; font-size: .82rem; font-weight: 650; padding: 5px 10px; }
 .latestSection { margin-top: 34px; }.sectionHeading { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 18px; }.sectionHeading h2 { color: var(--text-main); font-size: 1.2rem; margin: 0; }.sectionHeading p { color: var(--text-muted); font-size: .98rem; line-height: 1.5; margin: 6px 0 0; }.textButton { background: transparent; border: 0; color: var(--primary); cursor: pointer; font: inherit; font-size: .92rem; font-weight: 650; padding: 4px; }.textButton:hover { text-decoration: underline; }
 .updatesList { display: flex; flex-direction: column; gap: 18px; }.updatesList :global(article) { margin-top: 0; }
-.updateActions { align-items: center; display: flex; gap: 8px; margin-left: auto; }.deleteButton { align-items: center; background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius-sm); color: #b91c1c; cursor: pointer; display: inline-flex; height: 32px; justify-content: center; width: 32px; }.deleteButton:hover { background: #fee2e2; }
+.teamGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 20px; }
+.teammateCard { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; display: flex; flex-direction: column; gap: 14px; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.teammateCard:hover { border-color: var(--primary-border); box-shadow: var(--shadow-sm); }
+.teammateHeader { display: flex; align-items: center; gap: 12px; }
+.avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--primary-light); color: var(--primary); font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.teammateMeta { flex: 1; min-width: 0; }
+.teammateMeta strong { color: var(--text-main); font-size: 1rem; display: flex; align-items: center; gap: 6px; }
+.teammateMeta small { color: var(--text-muted); font-size: 0.85rem; display: block; margin-top: 2px; }
+.badgeYou { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; border-radius: 999px; font-size: 0.72rem; padding: 1px 7px; font-weight: 600; }
+.skillsList { display: flex; flex-wrap: wrap; gap: 6px; }
+.skillChip { background: var(--bg-surface-subtle); border: 1px solid var(--border-color); border-radius: 999px; font-size: 0.78rem; padding: 2px 9px; color: var(--text-secondary); }
+.projectOverviewCard { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 24px; margin-bottom: 24px; }
+.projectOverviewHeader { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.projectOverviewHeader h3 { margin: 0; font-size: 1.25rem; color: var(--text-main); }
+.projectGoalText { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.6; margin: 0; }
+.readOnlyBanner { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 10px 14px; color: #166534; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.detailSection { margin-top: 18px; }
+.detailSection h4 { color: var(--text-main); font-size: 0.92rem; font-weight: 650; margin: 0 0 8px; }
+.detailSection p, .detailSection ul { color: var(--text-secondary); font-size: 0.92rem; margin: 0; line-height: 1.5; padding-left: 20px; }
+.detailSection p { padding-left: 0; }
+.socialLinksRow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.socialLinkBtn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-surface-subtle); color: var(--primary); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+.socialLinkBtn:hover { background: var(--primary-light); }
 @media (max-width: 640px) { .drawer { padding: 20px; }.drawerActions { flex-direction: column-reverse; }.drawerActions button { justify-content: center; }.sectionHeading { align-items: stretch; flex-direction: column; }.updateActions { margin-left: 0; width: 100%; }.updateActions > :first-child { flex: 1; justify-content: center; } }

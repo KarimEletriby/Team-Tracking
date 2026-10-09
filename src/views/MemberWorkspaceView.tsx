@@ -1,6 +1,7 @@
 import { FormEvent, RefObject, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
+  CheckCircle2,
   BriefcaseBusiness,
   Code2,
   Edit3,
@@ -122,34 +123,35 @@ function ProfileEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const roleInputRef = useRef<HTMLInputElement | null>(null);
+  const bioInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const skillsInputRef = useRef<HTMLInputElement | null>(null);
+  const responsibilitiesInputRef = useRef<HTMLTextAreaElement | null>(null);
+
   const drawerRef = useDrawerAccessibility(onClose, returnFocusTarget);
 
   const cleanSkills = skillsText.split(',').map((value) => value.trim()).filter(Boolean);
   const cleanResponsibilities = responsibilitiesText.split('\n').map((value) => value.trim()).filter(Boolean);
 
-  const isFormValid = Boolean(
-    projectRole.trim() &&
-    bio.trim() &&
-    cleanSkills.length > 0 &&
-    cleanResponsibilities.length > 0
-  );
+  const missingFields: string[] = [];
+  if (!projectRole.trim()) missingFields.push('Project role');
+  if (!bio.trim()) missingFields.push('About you');
+  if (cleanSkills.length === 0) missingFields.push('Technical skills');
+  if (cleanResponsibilities.length === 0) missingFields.push('Responsibilities');
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!projectRole.trim()) {
-      setError('Project role is required.');
-      return;
-    }
-    if (!bio.trim()) {
-      setError('About you (bio) is required.');
-      return;
-    }
-    if (cleanSkills.length === 0) {
-      setError('At least one technical skill is required.');
-      return;
-    }
-    if (cleanResponsibilities.length === 0) {
-      setError('At least one responsibility is required.');
+    if (missingFields.length > 0) {
+      setError(`Cannot save profile. Please fill in the missing required fields: ${missingFields.join(', ')}.`);
+      if (!projectRole.trim()) {
+        roleInputRef.current?.focus();
+      } else if (!bio.trim()) {
+        bioInputRef.current?.focus();
+      } else if (cleanSkills.length === 0) {
+        skillsInputRef.current?.focus();
+      } else if (cleanResponsibilities.length === 0) {
+        responsibilitiesInputRef.current?.focus();
+      }
       return;
     }
 
@@ -178,6 +180,7 @@ function ProfileEditor({
         <label className={styles.fieldLabel}>
           <span className={styles.labelText}>Project role <strong className={styles.requiredStar}>*</strong></span>
           <input 
+            ref={roleInputRef}
             className="form-control" 
             value={projectRole} 
             onChange={(event) => { setProjectRole(event.target.value); setError(null); }} 
@@ -189,6 +192,7 @@ function ProfileEditor({
         <label className={styles.fieldLabel}>
           <span className={styles.labelText}>About you <strong className={styles.requiredStar}>*</strong></span>
           <textarea 
+            ref={bioInputRef}
             className="form-control" 
             rows={4} 
             value={bio} 
@@ -203,6 +207,7 @@ function ProfileEditor({
             <span className={styles.fieldHint}>Separate skills with commas.</span>
           </span>
           <input 
+            ref={skillsInputRef}
             className="form-control" 
             value={skillsText} 
             onChange={(event) => { setSkillsText(event.target.value); setError(null); }} 
@@ -216,6 +221,7 @@ function ProfileEditor({
             <span className={styles.fieldHint}>Use one line for each responsibility.</span>
           </span>
           <textarea 
+            ref={responsibilitiesInputRef}
             className="form-control" 
             rows={4} 
             value={responsibilitiesText} 
@@ -230,6 +236,27 @@ function ProfileEditor({
           <label className={styles.fieldLabel}>GitHub profile<input type="url" className="form-control" value={github} onChange={(event) => setGithub(event.target.value)} placeholder="https://github.com/your-name" /></label>
           <label className={styles.fieldLabel}>Portfolio website<input type="url" className="form-control" value={portfolio} onChange={(event) => setPortfolio(event.target.value)} placeholder="https://your-portfolio.com" /></label>
         </fieldset>
+
+        {/* Dynamic Missing Fields Notice */}
+        {missingFields.length > 0 ? (
+          <div className={styles.missingNotice}>
+            <AlertCircle size={18} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong>Required fields missing to save profile:</strong>
+              <div className={styles.missingTags}>
+                {missingFields.map((field) => (
+                  <span key={field} className={styles.missingTag}>• {field}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className={styles.readyNotice}>
+            <CheckCircle2 size={16} color="#16a34a" />
+            <span>All required fields completed. Ready to save!</span>
+          </div>
+        )}
+
         <div className={styles.drawerActions}>
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
             Cancel
@@ -237,10 +264,10 @@ function ProfileEditor({
           <button 
             type="submit" 
             className="btn btn-primary" 
-            disabled={saving || !isFormValid}
-            title={!isFormValid ? 'Please fill in all 4 required fields to save profile' : undefined}
+            disabled={saving}
+            title={missingFields.length > 0 ? `Missing required fields: ${missingFields.join(', ')}` : undefined}
           >
-            <Pencil size={16} />Save profile
+            <Pencil size={16} />{saving ? 'Saving...' : 'Save profile'}
           </button>
         </div>
       </form>

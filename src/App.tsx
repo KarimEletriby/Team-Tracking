@@ -126,6 +126,20 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+      if (state && state.appView) {
+        setCurrentView(state.appView);
+        if (currentUser?.role === 'mentor' || (currentUser?.role === 'admin' && activeWorkspace === 'mentor')) {
+          setMentorNavigationSignal((signal) => signal + 1);
+        }
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentUser, activeWorkspace]);
+
   const handleLoginSuccess = async (user: User, initialWorkspace?: 'admin' | 'mentor' | 'member') => {
     setCurrentUser(user);
     if (user.role === 'admin') {
@@ -159,6 +173,21 @@ export function App() {
       await api.logout();
     } catch {
       // Supabase token cleanup fallback
+    }
+  };
+
+  // Determine page title for Header
+  const getHeaderTitle = () => {
+    if (!currentUser) return '';
+    if (currentUser.role === 'admin' && activeWorkspace === 'admin') {
+      return 'System Administration';
+    } else if (currentUser.role === 'mentor' || (currentUser.role === 'admin' && activeWorkspace === 'mentor')) {
+      if (currentView === 'teams') return 'My Teams';
+      return 'Mentor Dashboard';
+    } else {
+      if (currentView === 'team') return 'My Team';
+      if (currentView === 'updates') return 'My Work Updates';
+      return 'My Profile';
     }
   };
 
@@ -203,34 +232,6 @@ export function App() {
   if (!currentUser) {
     return <LoginView onLoginSuccess={handleLoginSuccess} />;
   }
-
-  // Determine page title for Header
-  const getHeaderTitle = () => {
-    if (currentUser.role === 'admin' && activeWorkspace === 'admin') {
-      return 'System Administration';
-    } else if (currentUser.role === 'mentor' || (currentUser.role === 'admin' && activeWorkspace === 'mentor')) {
-      if (currentView === 'teams') return 'My Teams';
-      return 'Mentor Dashboard';
-    } else {
-      if (currentView === 'team') return 'My Team';
-      if (currentView === 'updates') return 'My Work Updates';
-      return 'My Profile';
-    }
-  };
-
-  useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      const state = event.state;
-      if (state && state.appView) {
-        setCurrentView(state.appView);
-        if (currentUser?.role === 'mentor' || (currentUser?.role === 'admin' && activeWorkspace === 'mentor')) {
-          setMentorNavigationSignal((signal) => signal + 1);
-        }
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [currentUser, activeWorkspace]);
 
   return (
     <div className="app-container">

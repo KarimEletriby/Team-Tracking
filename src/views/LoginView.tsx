@@ -60,7 +60,7 @@ const roleContent: Record<AccountRole, { label: string; shortLabel: string; desc
 };
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
-  const [mode, setMode] = useState<AuthMode>('landing');
+  const [mode, setMode] = useState<AuthMode>('login');
   const [selectedRole, setSelectedRole] = useState<AccountRole>('member');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,7 +72,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const selectRole = (role: AccountRole, nextMode: 'login' | 'register' = 'register', pushHistory = true) => {
+  const selectRole = (role: AccountRole, nextMode: 'login' | 'register' = 'login', pushHistory = true) => {
     setSelectedRole(role);
     setMode(nextMode);
     setError(null);
@@ -95,14 +95,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   };
 
   const handleBackToLanding = () => {
-    if (window.history.state && window.history.state.authMode && window.history.state.authMode !== 'landing') {
+    if (window.history.state && window.history.state.authMode && window.history.state.authMode !== 'login') {
       window.history.back();
     } else {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('auth');
-      url.searchParams.delete('role');
-      window.history.pushState({ authMode: 'landing' }, '', url.pathname + (url.search ? url.search : ''));
-      setMode('landing');
+      setMode('login');
       setError(null);
       setSuccessMsg(null);
     }
@@ -120,15 +116,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     const authParam = params.get('auth');
     const roleParam = params.get('role');
     if (
-      (authParam === 'login' || authParam === 'register') &&
-      (roleParam === 'member' || roleParam === 'mentor' || roleParam === 'admin')
+      (authParam === 'login' || authParam === 'register' || authParam === 'landing') &&
+      (!roleParam || roleParam === 'member' || roleParam === 'mentor' || roleParam === 'admin')
     ) {
-      setMode(authParam as AuthMode);
-      setSelectedRole(roleParam as AccountRole);
-      window.history.replaceState({ authMode: 'landing' }, '', window.location.pathname);
-      window.history.pushState({ authMode: authParam, role: roleParam }, '', window.location.href);
+      if (authParam === 'landing') {
+        setMode('landing');
+      } else {
+        setMode(authParam as AuthMode);
+        if (roleParam) setSelectedRole(roleParam as AccountRole);
+      }
     } else {
-      window.history.replaceState({ authMode: 'landing' }, '', window.location.href);
+      setMode('login');
+      if (roleParam === 'member' || roleParam === 'mentor' || roleParam === 'admin') {
+        setSelectedRole(roleParam as AccountRole);
+      }
     }
 
     const handlePopState = (event: PopStateEvent) => {
@@ -137,16 +138,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       const currentAuth = currentParams.get('auth');
       const currentRole = currentParams.get('role');
 
-      if (state && (state.authMode === 'login' || state.authMode === 'register')) {
+      if (state && (state.authMode === 'login' || state.authMode === 'register' || state.authMode === 'landing')) {
         setMode(state.authMode);
         if (state.role) setSelectedRole(state.role);
-      } else if (currentAuth === 'login' || currentAuth === 'register') {
+      } else if (currentAuth === 'login' || currentAuth === 'register' || currentAuth === 'landing') {
         setMode(currentAuth as AuthMode);
         if (currentRole === 'member' || currentRole === 'mentor' || currentRole === 'admin') {
           setSelectedRole(currentRole as AccountRole);
         }
       } else {
-        setMode('landing');
+        setMode('login');
       }
       setError(null);
       setSuccessMsg(null);
@@ -299,14 +300,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const RoleIcon = role.icon;
   return (
     <main className="authPage">
-      <button type="button" className="authBack" onClick={handleBackToLanding} aria-label="Go back to workspace selection">
-        <ArrowLeft size={17} /> Back
-      </button>
       <section className="authLayout">
         <aside className="authIntro">
           <div className="welcomeBrand"><span className="welcomeBrandMark"><Code2 size={21} /></span><strong>TeamTrack</strong></div>
           <div className="authIntroCopy">
-            <span className="welcomeEyebrow">{role.label.toUpperCase()} WORKSPACE</span>
+            <span className="welcomeEyebrow">{role.label.toUpperCase()} PORTAL</span>
             <h1>
               {selectedRole === 'admin'
                 ? 'Supervise with complete control.'
@@ -319,15 +317,49 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           <ul className="authBenefits">{role.points.map((point) => <li key={point}><CheckCircle2 size={17} />{point}</li>)}</ul>
         </aside>
         <section className="authPanel" aria-label={`${role.label} authentication`}>
-          <div className="authRoleBadge"><RoleIcon size={16} />{role.label}</div>
-          <h2>{mode === 'login' ? 'Welcome back' : `Create your ${role.label.toLowerCase()} account`}</h2>
-          <p className="authPanelDescription">{mode === 'login' ? 'Sign in to continue to your workspace.' : 'Use your email address to get started.'}</p>
+          {/* Top Role Workspace Switcher Tabs */}
+          <div className="authRoleSelector" role="tablist" aria-label="Choose workspace role">
+            {(['member', 'mentor', 'admin'] as AccountRole[]).map((r) => {
+              const rContent = roleContent[r];
+              const RIcon = rContent.icon;
+              const isSelected = selectedRole === r;
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  className={`roleSelectorBtn ${isSelected ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedRole(r);
+                    setError(null);
+                    setSuccessMsg(null);
+                    if (r === 'admin') setMode('login');
+                  }}
+                >
+                  <RIcon size={15} />
+                  <span>{r === 'admin' ? 'Admin' : r === 'mentor' ? 'Mentor' : 'Member'}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <h2>{mode === 'login' ? 'Sign in to TeamTrack' : `Create your ${role.label.toLowerCase()} account`}</h2>
+          <p className="authPanelDescription">
+            {mode === 'login'
+              ? `Enter your credentials to access the ${role.label.toLowerCase()} workspace.`
+              : 'Use your email address to get started.'}
+          </p>
+
           <div className="authModeTabs" role="tablist" aria-label="Authentication mode">
             <button type="button" role="tab" aria-selected={mode === 'login'} className={mode === 'login' ? 'active' : ''} onClick={() => switchMode('login')}>Sign in</button>
-            <button type="button" role="tab" aria-selected={mode === 'register'} className={mode === 'register' ? 'active' : ''} onClick={() => switchMode('register')}>
-              {selectedRole === 'member' ? 'Join as member' : 'Create account'}
-            </button>
+            {selectedRole !== 'admin' && (
+              <button type="button" role="tab" aria-selected={mode === 'register'} className={mode === 'register' ? 'active' : ''} onClick={() => switchMode('register')}>
+                {selectedRole === 'member' ? 'Join as member' : 'Create account'}
+              </button>
+            )}
           </div>
+
           {!isSupabaseConfigured && (
             <div className="authMessage error" role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
               <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -336,19 +368,91 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </div>
             </div>
           )}
+
           {error && <p className="authMessage error" role="alert">{error}</p>}
           {successMsg && <p className="authMessage success" role="status">{successMsg}</p>}
+
           {mode === 'login' ? (
             <form className="authForm" onSubmit={handleLogin}>
-              <label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoFocus required /></label>
-              <label><span>Password</span><span className="passwordInputWrap"><input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" required /><button type="button" className="passwordToggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></span></label>
-              <button className="btn btn-primary authSubmit" type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign in'} <ArrowRight size={17} /></button>
+              <label>
+                Email address
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  autoFocus
+                  required
+                />
+              </label>
+              <label>
+                <span>Password</span>
+                <span className="passwordInputWrap">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Enter your password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="passwordToggle"
+                    onClick={() => setShowPassword((value) => !value)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </span>
+              </label>
+              <button className="btn btn-primary authSubmit" type="submit" disabled={loading}>
+                {loading ? 'Signing in...' : `Sign in as ${role.label}`} <ArrowRight size={17} />
+              </button>
             </form>
           ) : (
             <form className="authForm" onSubmit={handleRegister}>
-              <label>Full name<input type="text" value={regName} onChange={(event) => setRegName(event.target.value)} placeholder="e.g. Maya Lin" autoFocus required /></label>
-              <label>Email address<input type="email" value={regEmail} onChange={(event) => setRegEmail(event.target.value)} placeholder="you@example.com" required /></label>
-              <label><span>Password</span><span className="passwordInputWrap"><input type={showPassword ? 'text' : 'password'} value={regPassword} onChange={(event) => setRegPassword(event.target.value)} placeholder="Create a password" minLength={6} required /><button type="button" className="passwordToggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></span></label>
+              <label>
+                Full name
+                <input
+                  type="text"
+                  value={regName}
+                  onChange={(event) => setRegName(event.target.value)}
+                  placeholder="e.g. Maya Lin"
+                  autoFocus
+                  required
+                />
+              </label>
+              <label>
+                Email address
+                <input
+                  type="email"
+                  value={regEmail}
+                  onChange={(event) => setRegEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  required
+                />
+              </label>
+              <label>
+                <span>Password</span>
+                <span className="passwordInputWrap">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={regPassword}
+                    onChange={(event) => setRegPassword(event.target.value)}
+                    placeholder="Create a password"
+                    minLength={6}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="passwordToggle"
+                    onClick={() => setShowPassword((value) => !value)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </span>
+              </label>
               {selectedRole === 'member' && (
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
                   Enter the email address provided by your mentor to automatically join your assigned team.
@@ -359,7 +463,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </button>
             </form>
           )}
-          <button type="button" className="switchRole" onClick={handleBackToLanding}>Not a {role.label.toLowerCase()}? Choose another workspace</button>
         </section>
       </section>
     </main>

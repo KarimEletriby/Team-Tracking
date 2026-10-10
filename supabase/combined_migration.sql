@@ -759,141 +759,114 @@ begin
   end if;
 
 
--- 13. Teammate Visibility & Teammates Listing RPC
-create or replace function public.is_member_of_team(target_team_id uuid)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_is_member boolean;
-begin
-  if auth.uid() is null then
-    return false;
-  end if;
-  select exists (
-    select 1 from public.team_members
-    where team_id = target_team_id and member_id = auth.uid()
-  ) into v_is_member;
-  return coalesce(v_is_member, false);
-end;
-$$;
+-- 13. Non-recursive Policies & Team Member Visibility Fix
+alter table public.teams enable row level security;
+grant select, insert, update, delete on public.teams to authenticated;
 
-create or replace function public.is_teammate_of(target_user_id uuid)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_is_teammate boolean;
-begin
-  if auth.uid() is null or target_user_id is null then
-    return false;
-  end if;
-  if auth.uid() = target_user_id then
-    return true;
-  end if;
-  select exists (
-    select 1
-    from public.team_members tm1
-    join public.team_members tm2 on tm1.team_id = tm2.team_id
-    where tm1.member_id = auth.uid() and tm2.member_id = target_user_id
-  ) into v_is_teammate;
-  return coalesce(v_is_teammate, false);
-end;
-$$;
+drop policy if exists "mentors can read owned teams" on public.teams;
+drop policy if exists "teams_select_policy" on public.teams;
+create policy "teams_select_policy"
+  on public.teams for select to authenticated
+  using (true);
 
-create or replace function public.is_mentor_of_team(target_team_id uuid)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_is_mentor boolean;
-begin
-  if auth.uid() is null then
-    return false;
-  end if;
-  select exists (
-    select 1 from public.teams
-    where id = target_team_id and mentor_id = auth.uid()
-  ) into v_is_mentor;
-  return coalesce(v_is_mentor, false);
-end;
-$$;
+drop policy if exists "mentors can create their own teams" on public.teams;
+drop policy if exists "teams_insert_policy" on public.teams;
+create policy "teams_insert_policy"
+  on public.teams for insert to authenticated
+  with check (
+    public.is_admin()
+    or (
+      mentor_id = auth.uid()
+      and exists (
+        select 1 from public.profiles where id = auth.uid() and (role = 'mentor' or role = 'admin')
+      )
+    )
+  );
 
-create or replace function public.mentor_manages_member(target_member_id uuid)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_manages boolean;
-begin
-  if auth.uid() is null or target_member_id is null then
-    return false;
-  end if;
-  select exists (
-    select 1
-    from public.team_members tm
-    join public.teams t on t.id = tm.team_id
-    where tm.member_id = target_member_id and t.mentor_id = auth.uid()
-  ) into v_manages;
-  return coalesce(v_manages, false);
-end;
-$$;
+drop policy if exists "mentors can update owned teams" on public.teams;
+drop policy if exists "teams_update_policy" on public.teams;
+create policy "teams_update_policy"
+  on public.teams for update to authenticated
+  using (public.is_admin() or mentor_id = auth.uid())
+  with check (public.is_admin() or mentor_id = auth.uid());
+
+drop policy if exists "mentors can delete owned teams" on public.teams;
+drop policy if exists "teams_delete_policy" on public.teams;
+create policy "teams_delete_policy"
+  on public.teams for delete to authenticated
+  using (public.is_admin() or mentor_id = auth.uid());
+
+alter table public.team_members enable row level security;
+grant select, insert, update, delete on public.team_members to authenticated;
 
 drop policy if exists "members see their assignment and mentors see owned assignments" on public.team_members;
 drop policy if exists "team_members_select_policy" on public.team_members;
 create policy "team_members_select_policy"
   on public.team_members for select to authenticated
-  using (
-    public.is_admin()
-    or member_id = auth.uid()
-    or public.is_mentor_of_team(team_id)
-    or public.is_member_of_team(team_id)
-  );
+  using (true);
+
+drop policy if exists "mentors can assign members to owned teams" on public.team_members;
+drop policy if exists "team_members_insert_policy" on public.team_members;
+create policy "team_members_insert_policy"
+  on public.team_members for insert to authenticated
+  with check (public.is_admin() or public.is_mentor_of_team(team_id));
+
+drop policy if exists "mentors can change assignments in owned teams" on public.team_members;
+drop policy if exists "team_members_update_policy" on public.team_members;
+create policy "team_members_update_policy"
+  on public.team_members for update to authenticated
+  using (public.is_admin() or public.is_mentor_of_team(team_id))
+  with check (public.is_admin() or public.is_mentor_of_team(team_id));
+
+drop policy if exists "mentors can remove members from owned teams" on public.team_members;
+drop policy if exists "team_members_delete_policy" on public.team_members;
+create policy "team_members_delete_policy"
+  on public.team_members for delete to authenticated
+  using (public.is_admin() or public.is_mentor_of_team(team_id));
+
+alter table public.profiles enable row level security;
+grant select on public.profiles to authenticated;
+grant update (full_name, avatar_url) on public.profiles to authenticated;
 
 drop policy if exists "profiles are visible to their owner or supervising mentor" on public.profiles;
 drop policy if exists "profiles are visible to authorized users" on public.profiles;
 drop policy if exists "profiles_select_policy" on public.profiles;
 create policy "profiles_select_policy"
   on public.profiles for select to authenticated
-  using (
-    id = auth.uid()
-    or public.is_admin()
-    or public.mentor_manages_member(id)
-    or public.is_teammate_of(id)
-  );
+  using (true);
+
+drop policy if exists "users can update their own safe profile fields" on public.profiles;
+drop policy if exists "profiles_update_policy" on public.profiles;
+create policy "profiles_update_policy"
+  on public.profiles for update to authenticated
+  using (id = auth.uid() or public.is_admin())
+  with check (id = auth.uid() or public.is_admin());
+
+alter table public.member_profiles enable row level security;
+grant select, update on public.member_profiles to authenticated;
 
 drop policy if exists "members read their profile and mentors read supervised profiles" on public.member_profiles;
 drop policy if exists "members read their profile and teammates/mentors read supervised profiles" on public.member_profiles;
 drop policy if exists "member_profiles_select_policy" on public.member_profiles;
 create policy "member_profiles_select_policy"
   on public.member_profiles for select to authenticated
-  using (
-    user_id = auth.uid()
-    or public.is_admin()
-    or public.mentor_manages_member(user_id)
-    or public.is_teammate_of(user_id)
-  );
+  using (true);
+
+drop policy if exists "members update only their own member profile" on public.member_profiles;
+drop policy if exists "member_profiles_update_policy" on public.member_profiles;
+create policy "member_profiles_update_policy"
+  on public.member_profiles for update to authenticated
+  using (user_id = auth.uid() or public.is_admin())
+  with check (user_id = auth.uid() or public.is_admin());
 
 alter table public.team_invitations enable row level security;
-grant select on public.team_invitations to authenticated;
+grant select, insert, update, delete on public.team_invitations to authenticated;
 
 drop policy if exists "mentors and admins manage team invitations" on public.team_invitations;
 drop policy if exists "team_invitations_select_policy" on public.team_invitations;
 create policy "team_invitations_select_policy"
   on public.team_invitations for select to authenticated
-  using (
-    public.is_admin()
-    or public.is_mentor_of_team(team_id)
-    or public.is_member_of_team(team_id)
-  );
+  using (true);
 
 drop policy if exists "team_invitations_write_policy" on public.team_invitations;
 create policy "team_invitations_write_policy"
@@ -908,17 +881,8 @@ security definer
 set search_path = public
 as $$
 declare
-  v_is_auth boolean;
   v_result jsonb;
 begin
-  v_is_auth := public.is_admin()
-    or public.is_mentor_of_team(p_team_id)
-    or exists (select 1 from public.team_members where team_id = p_team_id and member_id = auth.uid());
-
-  if not v_is_auth then
-    return '[]'::jsonb;
-  end if;
-
   select coalesce(jsonb_agg(m), '[]'::jsonb) into v_result
   from (
     select

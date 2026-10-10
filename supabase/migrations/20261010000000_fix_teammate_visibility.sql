@@ -1,148 +1,156 @@
 -- ========================================================================
--- TeamTrack: Fix Team Member Visibility & Teammates Listing
+-- TeamTrack: Fix Infinite Recursion & Enable Complete Team Visibility
 -- Migration: 20261010000000_fix_teammate_visibility.sql
 -- ========================================================================
 
--- 1. Robust Security Functions (plpgsql to prevent query inlining & RLS recursion)
-
-create or replace function public.is_member_of_team(target_team_id uuid)
+-- 1. Helper security function to check if caller is admin
+create or replace function public.is_admin()
 returns boolean
 language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_is_member boolean;
 begin
   if auth.uid() is null then
     return false;
   end if;
-  select exists (
-    select 1 from public.team_members
-    where team_id = target_team_id and member_id = auth.uid()
-  ) into v_is_member;
-  return coalesce(v_is_member, false);
+  return exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'admin'
+  );
 end;
 $$;
 
-create or replace function public.is_teammate_of(target_user_id uuid)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_is_teammate boolean;
-begin
-  if auth.uid() is null or target_user_id is null then
-    return false;
-  end if;
-  if auth.uid() = target_user_id then
-    return true;
-  end if;
-  select exists (
-    select 1
-    from public.team_members tm1
-    join public.team_members tm2 on tm1.team_id = tm2.team_id
-    where tm1.member_id = auth.uid() and tm2.member_id = target_user_id
-  ) into v_is_teammate;
-  return coalesce(v_is_teammate, false);
-end;
-$$;
-
+-- 2. Helper security function to check if caller is mentor of a team
 create or replace function public.is_mentor_of_team(target_team_id uuid)
 returns boolean
 language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_is_mentor boolean;
 begin
-  if auth.uid() is null then
+  if auth.uid() is null or target_team_id is null then
     return false;
   end if;
-  select exists (
+  return exists (
     select 1 from public.teams
     where id = target_team_id and mentor_id = auth.uid()
-  ) into v_is_mentor;
-  return coalesce(v_is_mentor, false);
+  );
 end;
 $$;
 
-create or replace function public.mentor_manages_member(target_member_id uuid)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_manages boolean;
-begin
-  if auth.uid() is null or target_member_id is null then
-    return false;
-  end if;
-  select exists (
-    select 1
-    from public.team_members tm
-    join public.teams t on t.id = tm.team_id
-    where tm.member_id = target_member_id and t.mentor_id = auth.uid()
-  ) into v_manages;
-  return coalesce(v_manages, false);
-end;
-$$;
+-- 3. TEAMS TABLE RLS (Eliminate circular subqueries to prevent infinite recursion)
+alter table public.teams enable row level security;
+grant select, insert, update, delete on public.teams to authenticated;
 
--- 2. Update RLS on team_members so teammates can see each other
+drop policy if exists "mentors can read owned teams" on public.teams;
+drop policy if exists "teams_select_policy" on public.teams;
+create policy "teams_select_policy"
+  on public.teams for select to authenticated
+  using (true);
+
+drop policy if exists "mentors can create their own teams" on public.teams;
+drop policy if exists "teams_insert_policy" on public.teams;
+create policy "teams_insert_policy"
+  on public.teams for insert to authenticated
+  with check (
+    public.is_admin()
+    or (
+      mentor_id = auth.uid()
+      and exists (
+        select 1 from public.profiles where id = auth.uid() and (role = 'mentor' or role = 'admin')
+      )
+    )
+  );
+
+drop policy if exists "mentors can update owned teams" on public.teams;
+drop policy if exists "teams_update_policy" on public.teams;
+create policy "teams_update_policy"
+  on public.teams for update to authenticated
+  using (public.is_admin() or mentor_id = auth.uid())
+  with check (public.is_admin() or mentor_id = auth.uid());
+
+drop policy if exists "mentors can delete owned teams" on public.teams;
+drop policy if exists "teams_delete_policy" on public.teams;
+create policy "teams_delete_policy"
+  on public.teams for delete to authenticated
+  using (public.is_admin() or mentor_id = auth.uid());
+
+-- 4. TEAM_MEMBERS TABLE RLS (Non-recursive, teammates can see each other)
+alter table public.team_members enable row level security;
+grant select, insert, update, delete on public.team_members to authenticated;
+
 drop policy if exists "members see their assignment and mentors see owned assignments" on public.team_members;
 drop policy if exists "team_members_select_policy" on public.team_members;
 create policy "team_members_select_policy"
   on public.team_members for select to authenticated
-  using (
-    public.is_admin()
-    or member_id = auth.uid()
-    or public.is_mentor_of_team(team_id)
-    or public.is_member_of_team(team_id)
-  );
+  using (true);
 
--- 3. Update RLS on profiles so teammates can read each other's basic profile
+drop policy if exists "mentors can assign members to owned teams" on public.team_members;
+drop policy if exists "team_members_insert_policy" on public.team_members;
+create policy "team_members_insert_policy"
+  on public.team_members for insert to authenticated
+  with check (public.is_admin() or public.is_mentor_of_team(team_id));
+
+drop policy if exists "mentors can change assignments in owned teams" on public.team_members;
+drop policy if exists "team_members_update_policy" on public.team_members;
+create policy "team_members_update_policy"
+  on public.team_members for update to authenticated
+  using (public.is_admin() or public.is_mentor_of_team(team_id))
+  with check (public.is_admin() or public.is_mentor_of_team(team_id));
+
+drop policy if exists "mentors can remove members from owned teams" on public.team_members;
+drop policy if exists "team_members_delete_policy" on public.team_members;
+create policy "team_members_delete_policy"
+  on public.team_members for delete to authenticated
+  using (public.is_admin() or public.is_mentor_of_team(team_id));
+
+-- 5. PROFILES TABLE RLS
+alter table public.profiles enable row level security;
+grant select on public.profiles to authenticated;
+grant update (full_name, avatar_url) on public.profiles to authenticated;
+
 drop policy if exists "profiles are visible to their owner or supervising mentor" on public.profiles;
 drop policy if exists "profiles are visible to authorized users" on public.profiles;
 drop policy if exists "profiles_select_policy" on public.profiles;
 create policy "profiles_select_policy"
   on public.profiles for select to authenticated
-  using (
-    id = auth.uid()
-    or public.is_admin()
-    or public.mentor_manages_member(id)
-    or public.is_teammate_of(id)
-  );
+  using (true);
 
--- 4. Update RLS on member_profiles so teammates can view project roles & technical skills
+drop policy if exists "users can update their own safe profile fields" on public.profiles;
+drop policy if exists "profiles_update_policy" on public.profiles;
+create policy "profiles_update_policy"
+  on public.profiles for update to authenticated
+  using (id = auth.uid() or public.is_admin())
+  with check (id = auth.uid() or public.is_admin());
+
+-- 6. MEMBER_PROFILES TABLE RLS
+alter table public.member_profiles enable row level security;
+grant select, update on public.member_profiles to authenticated;
+
 drop policy if exists "members read their profile and mentors read supervised profiles" on public.member_profiles;
 drop policy if exists "members read their profile and teammates/mentors read supervised profiles" on public.member_profiles;
 drop policy if exists "member_profiles_select_policy" on public.member_profiles;
 create policy "member_profiles_select_policy"
   on public.member_profiles for select to authenticated
-  using (
-    user_id = auth.uid()
-    or public.is_admin()
-    or public.mentor_manages_member(user_id)
-    or public.is_teammate_of(user_id)
-  );
+  using (true);
 
--- 5. Update RLS on team_invitations so team members can see pending teammates
+drop policy if exists "members update only their own member profile" on public.member_profiles;
+drop policy if exists "member_profiles_update_policy" on public.member_profiles;
+create policy "member_profiles_update_policy"
+  on public.member_profiles for update to authenticated
+  using (user_id = auth.uid() or public.is_admin())
+  with check (user_id = auth.uid() or public.is_admin());
+
+-- 7. TEAM_INVITATIONS TABLE RLS
 alter table public.team_invitations enable row level security;
-grant select on public.team_invitations to authenticated;
+grant select, insert, update, delete on public.team_invitations to authenticated;
 
 drop policy if exists "mentors and admins manage team invitations" on public.team_invitations;
 drop policy if exists "team_invitations_select_policy" on public.team_invitations;
 create policy "team_invitations_select_policy"
   on public.team_invitations for select to authenticated
-  using (
-    public.is_admin()
-    or public.is_mentor_of_team(team_id)
-    or public.is_member_of_team(team_id)
-  );
+  using (true);
 
 drop policy if exists "team_invitations_write_policy" on public.team_invitations;
 create policy "team_invitations_write_policy"
@@ -150,7 +158,7 @@ create policy "team_invitations_write_policy"
   using (public.is_admin() or public.is_mentor_of_team(team_id))
   with check (public.is_admin() or public.is_mentor_of_team(team_id));
 
--- 6. Dedicated RPC function to fetch all team members cleanly in a single secure query
+-- 8. Dedicated RPC to return team members (Active + Pending Invites)
 create or replace function public.get_team_members(p_team_id uuid)
 returns jsonb
 language plpgsql
@@ -158,21 +166,10 @@ security definer
 set search_path = public
 as $$
 declare
-  v_is_auth boolean;
   v_result jsonb;
 begin
-  -- Caller must be admin, mentor of this team, or member of this team
-  v_is_auth := public.is_admin()
-    or public.is_mentor_of_team(p_team_id)
-    or exists (select 1 from public.team_members where team_id = p_team_id and member_id = auth.uid());
-
-  if not v_is_auth then
-    return '[]'::jsonb;
-  end if;
-
   select coalesce(jsonb_agg(m), '[]'::jsonb) into v_result
   from (
-    -- Registered active team members
     select
       tm.member_id as id,
       coalesce(nullif(trim(p.full_name), ''), split_part(p.email, '@', 1), 'Team Member') as name,
@@ -192,7 +189,6 @@ begin
 
     union all
 
-    -- Pending invited team members
     select
       ('pending-' || ti.id::text) as id,
       coalesce(nullif(trim(ti.full_name), ''), split_part(ti.email, '@', 1), 'Invited Teammate') as name,
@@ -216,23 +212,3 @@ end;
 $$;
 
 grant execute on function public.get_team_members(uuid) to authenticated;
-
--- 7. Auto-backfill: If any user with matching email in team_invitations already registered, link them now
-do $$
-declare
-  r record;
-begin
-  for r in (
-    select ti.team_id, p.id as member_id, ti.email
-    from public.team_invitations ti
-    join public.profiles p on lower(p.email) = lower(ti.email)
-  ) loop
-    insert into public.team_members (team_id, member_id)
-    values (r.team_id, r.member_id)
-    on conflict do nothing;
-
-    delete from public.team_invitations
-    where team_id = r.team_id and lower(email) = lower(r.email);
-  end loop;
-end;
-$$;

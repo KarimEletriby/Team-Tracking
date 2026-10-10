@@ -8,6 +8,7 @@ import {
   MemberProfileInput,
   MemberProjectContext,
   MemberRepository,
+  MemberTeammateProfile,
   MemberWorkUpdate,
   MemberWorkUpdateInput,
 } from './contracts';
@@ -326,6 +327,33 @@ export class SupabaseMemberRepository implements MemberRepository {
     const assignment = data as unknown as TeamMembershipRow | null;
     const team = Array.isArray(assignment?.teams) ? assignment.teams[0] : assignment?.teams;
     if (!assignment || !team) {
+      // Check if user has a pending invitation waiting to be linked
+      try {
+        const { data: userProfile } = await client.from('profiles').select('email').eq('id', memberId).maybeSingle();
+        if (userProfile?.email) {
+          const { data: invite } = await client
+            .from('team_invitations')
+            .select('team_id, teams(id, name, project_name, project_goal)')
+            .ilike('email', userProfile.email)
+            .maybeSingle();
+          if (invite?.team_id) {
+            await client.from('team_members').upsert({ team_id: invite.team_id, member_id: memberId }, { onConflict: 'member_id' });
+            await client.from('team_invitations').delete().eq('team_id', invite.team_id).ilike('email', userProfile.email);
+            const invitedTeam = Array.isArray(invite.teams) ? invite.teams[0] : invite.teams;
+            if (invitedTeam) {
+              return {
+                teamId: invitedTeam.id,
+                teamName: invitedTeam.name,
+                projectName: invitedTeam.project_name,
+                projectGoal: invitedTeam.project_goal,
+              };
+            }
+          }
+        }
+      } catch (autoClaimErr) {
+        console.warn('Auto-claim team check completed with note:', autoClaimErr);
+      }
+
       return {
         teamId: '',
         teamName: 'No team assigned',
@@ -341,42 +369,91 @@ export class SupabaseMemberRepository implements MemberRepository {
     };
   }
 
-  async getTeammates(teamId: string, _currentMemberId: string): Promise<any[]> {
+  async getTeammates(teamId: string, currentMemberId: string): Promise<MemberTeammateProfile[]> {
     if (!teamId) return [];
     const client = requireSupabase();
 
-    const { data: tmData, error: tmError } = await client
-      .from('team_members')
-      .select('member_id, joined_at')
-      .eq('team_id', teamId);
-    if (tmError || !tmData || tmData.length === 0) return [];
+    // 1. Try dedicated RPC function first (handles security definer & complete teammate record)
+    try {
+      const { data: rpcData, error: rpcError } = await client.rpc('get_team_members', { p_team_id: teamId });
+      if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+        return rpcData.map((row: any) => ({
+          id: row.id,
+          name: row.name || 'Team member',
+          email: row.email || '',
+          avatarUrl: row.avatar_url ?? undefined,
+          projectRole: row.project_role || 'Team Member',
+          bio: row.bio || '',
+          technicalSkills: Array.isArray(row.technical_skills) ? row.technical_skills : [],
+          responsibilities: Array.isArray(row.responsibilities) ? row.responsibilities : [],
+          professionalLinks: toProfessionalLinks(row.social_links),
+          joinedAt: row.joined_at || new Date().toISOString(),
+        }));
+      }
+      if (rpcError) {
+        console.warn('get_team_members RPC call failed or is not installed yet:', rpcError.message);
+      }
+    } catch (rpcErr) {
+      console.warn('RPC get_team_members threw error, trying table fallback:', rpcErr);
+    }
 
-    const memberIds = tmData.map((x) => x.member_id);
+    // 2. Direct table queries fallback (active members + pending invitations)
+    try {
+      const [membersResult, invitesResult] = await Promise.all([
+        client.from('team_members').select('member_id, joined_at').eq('team_id', teamId),
+        client.from('team_invitations').select('id, email, full_name, created_at').eq('team_id', teamId),
+      ]);
 
-    const [profilesResult, memberProfilesResult] = await Promise.all([
-      client.from('profiles').select('id, full_name, email, avatar_url, created_at').in('id', memberIds),
-      client.from('member_profiles').select('user_id, project_role, bio, technical_skills, responsibilities, social_links').in('user_id', memberIds),
-    ]);
+      const activeRows = membersResult.data || [];
+      const inviteRows = invitesResult.data || [];
 
-    const profiles = new Map(((profilesResult.data ?? []) as any[]).map((p) => [p.id, p]));
-    const memberProfiles = new Map(((memberProfilesResult.data ?? []) as any[]).map((p) => [p.user_id, p]));
+      let activeTeammates: MemberTeammateProfile[] = [];
+      if (activeRows.length > 0) {
+        const memberIds = activeRows.map((x: any) => x.member_id);
+        const [profilesResult, memberProfilesResult] = await Promise.all([
+          client.from('profiles').select('id, full_name, email, avatar_url, created_at').in('id', memberIds),
+          client.from('member_profiles').select('user_id, project_role, bio, technical_skills, responsibilities, social_links').in('user_id', memberIds),
+        ]);
 
-    return tmData.map((tm) => {
-      const p = profiles.get(tm.member_id);
-      const mp = memberProfiles.get(tm.member_id);
-      return {
-        id: tm.member_id,
-        name: p?.full_name || p?.email?.split('@')[0] || 'Team member',
-        email: p?.email || '',
-        avatarUrl: p?.avatar_url ?? undefined,
-        projectRole: mp?.project_role || 'Team Member',
-        bio: mp?.bio || '',
-        technicalSkills: mp?.technical_skills ?? [],
-        responsibilities: mp?.responsibilities ?? [],
-        professionalLinks: toProfessionalLinks(mp?.social_links),
-        joinedAt: tm.joined_at,
-      };
-    });
+        const profiles = new Map(((profilesResult.data ?? []) as any[]).map((p) => [p.id, p]));
+        const memberProfiles = new Map(((memberProfilesResult.data ?? []) as any[]).map((p) => [p.user_id, p]));
+
+        activeTeammates = activeRows.map((tm: any) => {
+          const p = profiles.get(tm.member_id);
+          const mp = memberProfiles.get(tm.member_id);
+          return {
+            id: tm.member_id,
+            name: p?.full_name || p?.email?.split('@')[0] || (tm.member_id === currentMemberId ? 'You' : 'Team member'),
+            email: p?.email || '',
+            avatarUrl: p?.avatar_url ?? undefined,
+            projectRole: mp?.project_role || 'Team Member',
+            bio: mp?.bio || '',
+            technicalSkills: mp?.technical_skills ?? [],
+            responsibilities: mp?.responsibilities ?? [],
+            professionalLinks: toProfessionalLinks(mp?.social_links),
+            joinedAt: tm.joined_at,
+          };
+        });
+      }
+
+      const pendingTeammates: MemberTeammateProfile[] = inviteRows.map((invite: any) => ({
+        id: `pending-${invite.id}`,
+        name: invite.full_name || invite.email.split('@')[0] || 'Invited Teammate',
+        email: invite.email,
+        avatarUrl: undefined,
+        projectRole: 'Team Member (Pending signup)',
+        bio: 'Invited by mentor — will activate once they sign up.',
+        technicalSkills: [],
+        responsibilities: [],
+        professionalLinks: {},
+        joinedAt: invite.created_at,
+      }));
+
+      return [...activeTeammates, ...pendingTeammates];
+    } catch (fallbackErr) {
+      console.error('Error fetching teammates fallback:', fallbackErr);
+      return [];
+    }
   }
 
   private toMemberProfile(profile: ProfileRow, memberProfile: MemberProfileRow, email: string): MemberProfile {

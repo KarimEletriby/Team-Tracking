@@ -518,6 +518,47 @@ export function MemberWorkspaceView({ memberId, memberName, externalView, onSect
     <PageHeader eyebrow="Member workspace" title="My profile" description="Keep your role and technical context clear for your mentor and team." actions={<><button type="button" className="btn btn-secondary" onClick={(event) => { drawerTriggerRef.current = event.currentTarget; setIsProfileEditorOpen(true); }}><Pencil size={16} />Edit profile</button><button type="button" className="btn btn-primary" onClick={(event) => { drawerTriggerRef.current = event.currentTarget; setUpdateToEdit(null); }}><Plus size={16} />Add update</button></>} />
     {!profileIsComplete && <ProfileCompletionPrompt action={<button type="button" className="btn btn-primary btn-sm" onClick={(event) => { drawerTriggerRef.current = event.currentTarget; setIsProfileEditorOpen(true); }}>Complete profile</button>} />}
     <ProfileSummaryCard name={memberName} role={home.member.projectRole || 'Role not added yet'} teamName={home.project.teamName} projectName={home.project.projectName} bio={home.member.bio} skills={home.member.technicalSkills} responsibilities={home.member.responsibilities} professionalLinks={home.member.professionalLinks} headerAction={<button type="button" className="btn btn-secondary btn-sm" onClick={() => goTo('team')}><Users size={14} />View team</button>} />
+    {home.teammates.length > 0 && (
+      <section className={styles.latestSection}>
+        <div className={styles.sectionHeading}>
+          <div>
+            <h2>Your Teammates ({home.teammates.length})</h2>
+            <p>Collaborating with you on {home.project.projectName || 'this project'}.</p>
+          </div>
+          <button type="button" className={styles.textButton} onClick={() => goTo('team')}>View all team details</button>
+        </div>
+        <div className={styles.teamGrid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+          {home.teammates.slice(0, 4).map((teammate) => {
+            const isCurrentUser = teammate.id === memberId;
+            return (
+              <article key={teammate.id} className={styles.teammateCard} style={{ padding: '16px' }}>
+                <div className={styles.teammateHeader}>
+                  <div className={styles.avatar}>{teammate.name.charAt(0).toUpperCase()}</div>
+                  <div className={styles.teammateMeta}>
+                    <strong>
+                      {teammate.name}
+                      {isCurrentUser && <span className={styles.badgeYou}>You</span>}
+                      {teammate.id.startsWith('pending-') && <span className="badge badge-purple" style={{ marginLeft: 6, fontSize: '0.65rem' }}>Invited</span>}
+                    </strong>
+                    <small>{teammate.projectRole || 'Team Member'}</small>
+                  </div>
+                </div>
+                <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ width: '100%', justifyContent: 'center' }}
+                    onClick={() => setSelectedTeammate(teammate)}
+                  >
+                    <Eye size={14} /> View profile
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    )}
     <section className={styles.latestSection}><div className={styles.sectionHeading}><div><h2>Latest update</h2><p>{home.updateCount ? 'Your most recent work shared with the team.' : 'Start documenting your progress.'}</p></div><button type="button" className={styles.textButton} onClick={() => goTo('updates')}>View all updates</button></div>{home.latestUpdate ? <UpdateCard title={home.latestUpdate.title} dateLabel={formatDate(home.latestUpdate.createdAt)} summary={home.latestUpdate.whatWorkedOn} technicalContribution={home.latestUpdate.technicalContribution} nextStep={home.latestUpdate.nextStep} evidenceUrl={home.latestUpdate.evidenceUrl} evidenceFile={home.latestUpdate.evidenceFile} /> : <UpdatesEmptyState action={<button type="button" className="btn btn-primary" onClick={(event) => { drawerTriggerRef.current = event.currentTarget; setUpdateToEdit(null); }}>Add your first update</button>} />}</section>
   </>;
 
@@ -554,6 +595,7 @@ export function MemberWorkspaceView({ memberId, memberName, externalView, onSect
                   <strong>
                     {teammate.name}
                     {isCurrentUser && <span className={styles.badgeYou}>You</span>}
+                    {teammate.id.startsWith('pending-') && <span className="badge badge-purple" style={{ marginLeft: 6, fontSize: '0.65rem' }}>Invited</span>}
                   </strong>
                   <small>{teammate.projectRole || 'Team Member'}</small>
                 </div>

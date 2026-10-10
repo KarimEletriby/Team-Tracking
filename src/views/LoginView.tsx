@@ -38,7 +38,7 @@ const roleContent: Record<AccountRole, { label: string; shortLabel: string; desc
   mentor: {
     label: 'Mentor',
     shortLabel: 'I’m a mentor',
-    description: 'Create teams, invite members, and supervise projects. (Mentors must be authorized by administrator KE).',
+    description: 'Create teams, invite members, and supervise projects. (Mentors must be authorized by administrator K-Eletriby).',
     icon: LayoutDashboard,
     points: [
       'Create and supervise project teams',
@@ -234,7 +234,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               <div className="adminContactText">
                 <h4>System Access & Authorization</h4>
                 <p>
-                  Mentors must be authorized by the administrator (KE). Members join using the email provided by their mentor. Access is strictly invitation-only for verified project workspaces.
+                  Mentors must be authorized by the administrator (K-Eletriby). Members join using the email provided by their mentor. Access is strictly invitation-only for verified project workspaces.
                 </p>
               </div>
             </div>

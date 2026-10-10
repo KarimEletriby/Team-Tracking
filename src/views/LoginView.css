@@ -138,44 +138,9 @@
 .authBenefits svg { color: #38bdf8; }
 .authPanel { padding: 48px; display: flex; flex-direction: column; justify-content: center; }
 .authRoleBadge { width: fit-content; display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; color: #1d4ed8; background: #eff6ff; border-radius: 6px; font-size: .78rem; font-weight: 700; }
-.authRoleSelector {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin: 0 0 18px;
-  background: #f1f5f9;
-  padding: 4px;
-  border-radius: 9px;
-  border: 1px solid #e2e8f0;
-}
-.roleSelectorBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 6px;
-  border: 0;
-  border-radius: 6px;
-  color: #64748b;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
-  transition: all 0.15s ease;
-}
-.roleSelectorBtn:hover {
-  color: #0f172a;
-}
-.roleSelectorBtn.active {
-  color: #1d4ed8;
-  background: #ffffff;
-  font-weight: 700;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-}
 .authPanel h2 { margin: 14px 0 4px; font-size: 1.55rem; letter-spacing: -.03em; }
 .authPanelDescription { color: #64748b; font-size: .9rem; }
-.authModeTabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; padding: 4px; margin: 18px 0 16px; background: #f1f5f9; border-radius: 8px; }
+.authModeTabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; padding: 4px; margin: 22px 0 18px; background: #f1f5f9; border-radius: 8px; }
 .authModeTabs button { padding: 8px; border: 0; border-radius: 6px; color: #64748b; background: transparent; cursor: pointer; font: inherit; font-size: .85rem; font-weight: 600; }
 .authModeTabs button.active { color: #0f172a; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, .09); }
 .authForm { display: grid; gap: 14px; }

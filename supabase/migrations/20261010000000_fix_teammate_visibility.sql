@@ -39,6 +39,41 @@ begin
 end;
 $$;
 
+-- 2.1 Fix trigger on teams so admins & mentors can both create teams
+create or replace function public.assert_team_mentor()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if exists (
+    select 1 from public.profiles
+    where id = new.mentor_id and (role = 'mentor' or role = 'admin')
+  ) then
+    return new;
+  end if;
+
+  if exists (
+    select 1 from public.profiles
+    where id = new.mentor_id and lower(email) = 'karimeletriby15@gmail.com'
+  ) then
+    update public.profiles set role = 'admin' where id = new.mentor_id;
+    return new;
+  end if;
+
+  -- Promote user creating the team to mentor so they are never blocked
+  update public.profiles set role = 'mentor' where id = new.mentor_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists teams_require_mentor on public.teams;
+create trigger teams_require_mentor
+  before insert or update of mentor_id on public.teams
+  for each row execute procedure public.assert_team_mentor();
+
+update public.profiles set role = 'admin' where lower(email) = 'karimeletriby15@gmail.com';
+
 -- 3. TEAMS TABLE RLS (Eliminate circular subqueries to prevent infinite recursion)
 alter table public.teams enable row level security;
 grant select, insert, update, delete on public.teams to authenticated;

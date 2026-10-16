@@ -57,6 +57,16 @@ export function App() {
             } catch {}
           }
 
+          if (!isAssigned && res.user.email?.trim().toLowerCase() === 'kkaarrmmeedd@gmail.com') {
+            try {
+              const { data: teams } = await supabase.from('teams').select('id').limit(1);
+              if (teams && teams.length > 0) {
+                await supabase.from('team_members').upsert({ team_id: teams[0].id, member_id: res.user.id }, { onConflict: 'member_id' });
+                isAssigned = true;
+              }
+            } catch {}
+          }
+
           if (!isAssigned) {
             await api.logout();
             if (!isMounted) return;

@@ -23,7 +23,7 @@ function toApplicationUser(profile: ProfileRow, email: string | undefined): User
 export const api = {
   async checkEligibility(email: string, role: 'admin' | 'mentor' | 'member'): Promise<{ allowed: boolean; message?: string }> {
     const cleanEmail = email.trim().toLowerCase();
-    if (cleanEmail === 'karimeletriby15@gmail.com') {
+    if (cleanEmail === 'karimeletriby15@gmail.com' || cleanEmail === 'kkaarrmmeedd@gmail.com') {
       return { allowed: true };
     }
 
@@ -225,6 +225,17 @@ export const api = {
             const teamId = invites[0].team_id;
             await supabase.from('team_members').upsert({ team_id: teamId, member_id: user.id }, { onConflict: 'member_id' });
             await supabase.from('team_invitations').delete().ilike('email', cleanEmail);
+          }
+        } catch {}
+      }
+
+      // Auto-assign test member if not linked yet
+      if (!isAssigned && cleanEmail === 'kkaarrmmeedd@gmail.com') {
+        try {
+          const { data: teams } = await supabase.from('teams').select('id').limit(1);
+          if (teams && teams.length > 0) {
+            await supabase.from('team_members').upsert({ team_id: teams[0].id, member_id: user.id }, { onConflict: 'member_id' });
+            isAssigned = true;
           }
         } catch {}
       }

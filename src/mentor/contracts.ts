@@ -19,6 +19,7 @@ export interface MentorTeam {
   name: string;
   projectName: string;
   projectGoal: string;
+  round: number;
   memberCount: number;
   health: TeamHealth;
   completionPercent: number;
@@ -115,6 +116,7 @@ export interface MentorRepository {
   getMemberReview(memberId: EntityId): Promise<MemberReviewData | null>;
   createTeam(mentorId: EntityId, input: CreateTeamInput): Promise<MentorTeam>;
   updateTeam(teamId: EntityId, input: UpdateTeamInput): Promise<MentorTeam | null>;
+  updateTeamRound?(teamId: EntityId, round: number): Promise<MentorTeam | null>;
   addMember(teamId: EntityId, input: CreateMemberInput): Promise<MentorMemberProfile | null>;
   moveMember(memberId: EntityId, teamId: EntityId): Promise<MentorMemberProfile | null>;
   removeMember(memberId: EntityId): Promise<boolean>;
@@ -124,6 +126,7 @@ export interface CreateTeamInput {
   name: string;
   projectName: string;
   projectGoal: string;
+  round?: number;
 }
 
 export type UpdateTeamInput = CreateTeamInput;

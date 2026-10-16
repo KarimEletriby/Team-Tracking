@@ -24,6 +24,7 @@ type TeamRow = {
   name: string;
   project_name: string;
   project_goal: string;
+  round?: number | null;
 };
 
 type MembershipRow = { team_id: string; member_id: string; joined_at: string };
@@ -128,29 +129,52 @@ export class SupabaseMentorRepository implements MentorRepository {
   async getTeams(mentorId: EntityId): Promise<MentorTeam[]> {
     await this.requireMentor(mentorId);
     const supabase = requireSupabase();
-    const { data, error } = await supabase
-      .from('teams')
-      .select('id, mentor_id, name, project_name, project_goal')
-      .eq('mentor_id', mentorId)
-      .order('created_at', { ascending: true });
-    throwIfError(error);
+    let teams: TeamRow[] = [];
+    try {
+      const { data, error } = await supabase
+        .from('teams')
+        .select('id, mentor_id, name, project_name, project_goal, round')
+        .eq('mentor_id', mentorId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      teams = (data ?? []) as TeamRow[];
+    } catch {
+      // Graceful fallback if round column is not in DB yet
+      const { data, error } = await supabase
+        .from('teams')
+        .select('id, mentor_id, name, project_name, project_goal')
+        .eq('mentor_id', mentorId)
+        .order('created_at', { ascending: true });
+      throwIfError(error);
+      teams = ((data ?? []) as TeamRow[]).map((t) => ({ ...t, round: 2 }));
+    }
 
-    const teams = (data ?? []) as TeamRow[];
     return Promise.all(teams.map((team) => this.toMentorTeam(team)));
   }
 
   async getTeamWorkspace(teamId: EntityId): Promise<TeamWorkspaceData | null> {
     await this.requireMentor();
     const supabase = requireSupabase();
-    const { data, error } = await supabase
-      .from('teams')
-      .select('id, mentor_id, name, project_name, project_goal')
-      .eq('id', teamId)
-      .maybeSingle();
-    throwIfError(error);
-    if (!data) return null;
+    let team: TeamRow | null = null;
+    try {
+      const { data, error } = await supabase
+        .from('teams')
+        .select('id, mentor_id, name, project_name, project_goal, round')
+        .eq('id', teamId)
+        .maybeSingle();
+      if (error) throw error;
+      team = data as TeamRow | null;
+    } catch {
+      const { data, error } = await supabase
+        .from('teams')
+        .select('id, mentor_id, name, project_name, project_goal')
+        .eq('id', teamId)
+        .maybeSingle();
+      throwIfError(error);
+      team = data ? { ...(data as TeamRow), round: 2 } : null;
+    }
+    if (!team) return null;
 
-    const team = data as TeamRow;
     const details = await this.loadTeamDetails(team.id);
     return {
       team: this.toMentorTeamFromDetails(team, details.members, details.updates),
@@ -194,26 +218,92 @@ export class SupabaseMentorRepository implements MentorRepository {
   async createTeam(mentorId: EntityId, input: CreateTeamInput): Promise<MentorTeam> {
     await this.requireMentor(mentorId);
     const supabase = requireSupabase();
-    const { data, error } = await supabase
-      .from('teams')
-      .insert({ mentor_id: mentorId, name: input.name.trim(), project_name: input.projectName.trim(), project_goal: input.projectGoal.trim() })
-      .select('id, mentor_id, name, project_name, project_goal')
-      .single();
-    throwIfError(error);
-    return this.toMentorTeam(data as TeamRow);
+    const round = typeof input.round === 'number' && input.round > 0 ? input.round : 2;
+    let data: TeamRow;
+    try {
+      const res = await supabase
+        .from('teams')
+        .insert({
+          mentor_id: mentorId,
+          name: input.name.trim(),
+          project_name: input.projectName.trim(),
+          project_goal: input.projectGoal.trim(),
+          round,
+        })
+        .select('id, mentor_id, name, project_name, project_goal, round')
+        .single();
+      if (res.error) throw res.error;
+      data = res.data as TeamRow;
+    } catch {
+      const fallback = await supabase
+        .from('teams')
+        .insert({
+          mentor_id: mentorId,
+          name: input.name.trim(),
+          project_name: input.projectName.trim(),
+          project_goal: input.projectGoal.trim(),
+        })
+        .select('id, mentor_id, name, project_name, project_goal')
+        .single();
+      throwIfError(fallback.error);
+      data = { ...(fallback.data as TeamRow), round };
+    }
+    return this.toMentorTeam(data);
   }
 
   async updateTeam(teamId: EntityId, input: UpdateTeamInput): Promise<MentorTeam | null> {
     await this.requireMentor();
     const supabase = requireSupabase();
-    const { data, error } = await supabase
-      .from('teams')
-      .update({ name: input.name.trim(), project_name: input.projectName.trim(), project_goal: input.projectGoal.trim() })
-      .eq('id', teamId)
-      .select('id, mentor_id, name, project_name, project_goal')
-      .maybeSingle();
-    throwIfError(error);
-    return data ? this.toMentorTeam(data as TeamRow) : null;
+    const round = typeof input.round === 'number' && input.round > 0 ? input.round : 2;
+    let data: TeamRow | null = null;
+    try {
+      const res = await supabase
+        .from('teams')
+        .update({
+          name: input.name.trim(),
+          project_name: input.projectName.trim(),
+          project_goal: input.projectGoal.trim(),
+          round,
+        })
+        .eq('id', teamId)
+        .select('id, mentor_id, name, project_name, project_goal, round')
+        .maybeSingle();
+      if (res.error) throw res.error;
+      data = res.data as TeamRow | null;
+    } catch {
+      const fallback = await supabase
+        .from('teams')
+        .update({
+          name: input.name.trim(),
+          project_name: input.projectName.trim(),
+          project_goal: input.projectGoal.trim(),
+        })
+        .eq('id', teamId)
+        .select('id, mentor_id, name, project_name, project_goal')
+        .maybeSingle();
+      throwIfError(fallback.error);
+      data = fallback.data ? { ...(fallback.data as TeamRow), round } : null;
+    }
+    return data ? this.toMentorTeam(data) : null;
+  }
+
+  async updateTeamRound(teamId: EntityId, round: number): Promise<MentorTeam | null> {
+    await this.requireMentor();
+    const supabase = requireSupabase();
+    try {
+      const { data, error } = await supabase
+        .from('teams')
+        .update({ round })
+        .eq('id', teamId)
+        .select('id, mentor_id, name, project_name, project_goal, round')
+        .maybeSingle();
+      if (error) throw error;
+      if (data) return this.toMentorTeam(data as TeamRow);
+    } catch {
+      // fallback
+    }
+    const { data } = await supabase.from('teams').select('id, mentor_id, name, project_name, project_goal').eq('id', teamId).maybeSingle();
+    return data ? this.toMentorTeam({ ...(data as TeamRow), round }) : null;
   }
 
   async addMember(teamId: EntityId, input: CreateMemberInput): Promise<MentorMemberProfile | null> {
@@ -358,12 +448,15 @@ export class SupabaseMentorRepository implements MentorRepository {
     if (members.length > 0 && needsAttentionCount === members.length) health = 'at-risk';
     else if (needsAttentionCount > 0) health = 'needs-attention';
 
+    const round = typeof team.round === 'number' && team.round > 0 ? team.round : 2;
+
     return {
       id: team.id,
       mentorId: team.mentor_id,
       name: team.name,
       projectName: team.project_name,
       projectGoal: team.project_goal,
+      round,
       memberCount: members.length,
       health,
       completionPercent: 0,

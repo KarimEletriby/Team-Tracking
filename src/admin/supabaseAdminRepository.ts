@@ -92,6 +92,7 @@ export class SupabaseAdminRepository implements AdminRepository {
         projectName: t.project_name,
         mentorName: mentor ? mentor.full_name || mentor.email.split('@')[0] : 'Unknown Mentor',
         memberCount: typeof memberCount === 'number' ? memberCount : 0,
+        round: (t as any).round || 2,
         createdAt: t.created_at,
       };
     });

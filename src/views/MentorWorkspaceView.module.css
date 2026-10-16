@@ -48,3 +48,176 @@
 .dangerButton:disabled { cursor: not-allowed; opacity: .65; }
 @media (max-width: 1050px) { .statGrid { grid-template-columns: repeat(2, 1fr); }.dashboardGrid, .memberDetailGrid { grid-template-columns: 1fr; }.workspaceSummary { grid-template-columns: repeat(2, 1fr); row-gap: 15px; }.workspaceSummary div:nth-child(3) { border-left: 0; padding-left: 0; } }
 @media (max-width: 700px) { .statGrid, .profileGrid, .scoreGrid { grid-template-columns: 1fr; }.memberTable > button { gap: 10px; grid-template-columns: 36px minmax(0, 1fr) 18px; }.memberTable > button > span:nth-of-type(2), .memberTable > button > .statusBadge { display: none; }.workspaceSummary { grid-template-columns: 1fr; }.workspaceSummary div, .workspaceSummary div:nth-child(3) { border-left: 0; border-top: 1px solid var(--border-subtle); padding: 12px 0 0; }.workspaceSummary div:first-child { border-top: 0; padding-top: 0; }.profileIntro { align-items: flex-start; flex-wrap: wrap; }.drawer { padding: 18px; }.drawerActions { flex-direction: column-reverse; }.drawerActions button { justify-content: center; }.teamMeta { grid-template-columns: 1fr 1fr; }.teamMeta div:last-child { grid-column: 1 / -1; } }
+
+/* Round Management & Stage Segmentation */
+.roundTabsBar {
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 8px 12px;
+}
+
+.roundTabsLabel {
+  align-items: center;
+  color: var(--text-muted);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 700;
+  gap: 6px;
+  letter-spacing: 0.04em;
+  margin-right: 6px;
+  text-transform: uppercase;
+}
+
+.roundTabBtn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  gap: 8px;
+  padding: 6px 14px;
+  transition: all 0.15s ease;
+}
+
+.roundTabBtn:hover {
+  background: var(--bg-surface-subtle);
+  color: var(--text-main);
+}
+
+.roundTabBtnActive {
+  background: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+  color: #ffffff !important;
+}
+
+.roundTabBtnActive .roundTabCount {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+.roundTabCount {
+  background: var(--bg-surface-subtle);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 1px 7px;
+}
+
+.roundBadge {
+  align-items: center;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+  border-radius: 9999px;
+  color: #5b21b6;
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 700;
+  gap: 4px;
+  letter-spacing: 0.01em;
+  padding: 3px 9px;
+}
+
+.roundBadgeHeader {
+  align-items: center;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+  border-radius: 9999px;
+  color: #5b21b6;
+  display: inline-flex;
+  font-size: 0.85rem;
+  font-weight: 700;
+  gap: 6px;
+  padding: 6px 12px;
+}
+
+.roundSection {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 28px;
+  padding: 24px;
+}
+
+.roundSectionHeader {
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: space-between;
+  padding-bottom: 18px;
+}
+
+.roundTitleArea {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.roundIcon {
+  align-items: center;
+  background: #ede9fe;
+  border-radius: var(--radius-sm);
+  color: #6d28d9;
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.roundTitleArea h3 {
+  color: var(--text-main);
+  font-size: 1.15rem;
+  font-weight: 750;
+  margin: 0;
+}
+
+.roundSubtitle {
+  color: var(--text-muted);
+  display: block;
+  font-size: 0.84rem;
+  margin-top: 2px;
+}
+
+.activeRoundPill {
+  background: #dbeafe;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  color: #1e40af;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 9px;
+  text-transform: uppercase;
+}
+
+.emptyRoundBox {
+  align-items: center;
+  background: var(--bg-surface-subtle);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.92rem;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+  padding: 36px 20px;
+  text-align: center;
+}
+

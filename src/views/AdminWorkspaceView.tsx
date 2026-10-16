@@ -311,6 +311,7 @@ export const AdminWorkspaceView: React.FC<AdminWorkspaceViewProps> = ({
               <thead>
                 <tr>
                   <th>Team Name</th>
+                  <th>Round</th>
                   <th>Project</th>
                   <th>Supervising Mentor</th>
                   <th>Members</th>
@@ -321,6 +322,21 @@ export const AdminWorkspaceView: React.FC<AdminWorkspaceViewProps> = ({
                 {data.teams.map((team) => (
                   <tr key={team.id}>
                     <td><strong>{team.name}</strong></td>
+                    <td>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '3px 8px',
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 650,
+                        background: '#e0e7ff',
+                        color: '#4338ca',
+                        border: '1px solid rgba(99, 102, 241, 0.25)',
+                      }}>
+                        Round {team.round || 2}
+                      </span>
+                    </td>
                     <td>{team.projectName}</td>
                     <td>{team.mentorName}</td>
                     <td>{team.memberCount} member{team.memberCount === 1 ? '' : 's'}</td>

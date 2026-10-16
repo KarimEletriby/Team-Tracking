@@ -20,6 +20,7 @@ export interface AdminTeamItem {
   projectName: string;
   mentorName: string;
   memberCount: number;
+  round?: number;
   createdAt: string;
 }
 

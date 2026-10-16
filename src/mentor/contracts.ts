@@ -51,12 +51,15 @@ export interface MentorProfessionalLinks {
   linkedIn?: string;
   github?: string;
   portfolio?: string;
+  cvUrl?: string;
+  cvFileName?: string;
 }
 
 export interface MentorWorkUpdate {
   id: EntityId;
   teamId: EntityId;
   memberId: EntityId;
+  weekNumber?: number;
   title: string;
   summary: string;
   technicalDetails: string;

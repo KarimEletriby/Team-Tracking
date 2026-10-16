@@ -60,6 +60,7 @@ type AttachmentRow = {
 type WorkUpdateRow = {
   id: string;
   member_id: string;
+  week_number?: number | null;
   title: string;
   what_worked_on: string;
   technical_contribution: string;
@@ -105,6 +106,8 @@ const toProfessionalLinks = (value: unknown): MemberProfessionalLinks => {
     linkedIn: stringValue(links.linkedIn),
     github: stringValue(links.github),
     portfolio: stringValue(links.portfolio),
+    cvUrl: stringValue(links.cvUrl),
+    cvFileName: stringValue(links.cvFileName),
   };
 };
 
@@ -112,6 +115,8 @@ const cleanProfessionalLinks = (links: MemberProfessionalLinks): MemberProfessio
   linkedIn: normaliseHttpUrl(links.linkedIn, 'LinkedIn URL'),
   github: normaliseHttpUrl(links.github, 'GitHub URL'),
   portfolio: normaliseHttpUrl(links.portfolio, 'Portfolio URL'),
+  cvUrl: normaliseHttpUrl(links.cvUrl, 'CV Link URL'),
+  cvFileName: normaliseText(links.cvFileName),
 });
 
 const cleanStringList = (values: string[]): string[] =>
@@ -178,17 +183,60 @@ export class SupabaseMemberRepository implements MemberRepository {
     }
 
     const client = requireSupabase();
-    const { error } = await client
-      .from('member_profiles')
-      .update({
-        project_role: projectRole,
-        bio: bio,
-        technical_skills: technicalSkills,
-        responsibilities: responsibilities,
-        social_links: cleanProfessionalLinks(input.professionalLinks),
-      })
-      .eq('user_id', memberId);
-    if (error) throw new Error(error.message);
+    const professionalLinks = { ...input.professionalLinks };
+
+    if (input.cvFile && input.cvFile.dataUrl.startsWith('data:')) {
+      try {
+        const blob = await toDataBlob(input.cvFile);
+        const cvPath = `${memberId}/cv/${crypto.randomUUID()}-${safeFileName(input.cvFile.fileName)}`;
+        const { error: uploadError } = await client.storage.from(EVIDENCE_BUCKET).upload(cvPath, blob, {
+          contentType: input.cvFile.mimeType || blob.type || 'application/pdf',
+          upsert: true,
+        });
+        if (!uploadError) {
+          const { data: signedData } = await client.storage
+            .from(EVIDENCE_BUCKET)
+            .createSignedUrl(cvPath, 60 * 60 * 24 * 365);
+          if (signedData?.signedUrl) {
+            professionalLinks.cvUrl = signedData.signedUrl;
+            professionalLinks.cvFileName = input.cvFile.fileName;
+          }
+        } else {
+          console.warn('Could not upload CV file to storage:', uploadError);
+        }
+      } catch (cvErr) {
+        console.warn('CV file upload failed:', cvErr);
+      }
+    }
+
+    const cleanedLinks = cleanProfessionalLinks(professionalLinks);
+
+    try {
+      const { error } = await client
+        .from('member_profiles')
+        .update({
+          project_role: projectRole,
+          bio: bio,
+          technical_skills: technicalSkills,
+          responsibilities: responsibilities,
+          social_links: cleanedLinks,
+          cv_url: cleanedLinks.cvUrl ?? null,
+        })
+        .eq('user_id', memberId);
+      if (error) throw error;
+    } catch {
+      const { error: fallbackError } = await client
+        .from('member_profiles')
+        .update({
+          project_role: projectRole,
+          bio: bio,
+          technical_skills: technicalSkills,
+          responsibilities: responsibilities,
+          social_links: cleanedLinks,
+        })
+        .eq('user_id', memberId);
+      if (fallbackError) throw new Error(fallbackError.message);
+    }
 
     const [profile, memberProfile] = await Promise.all([
       this.getProfileRow(memberId),
@@ -202,45 +250,84 @@ export class SupabaseMemberRepository implements MemberRepository {
   async getUpdates(memberId: MemberEntityId): Promise<MemberWorkUpdate[]> {
     await this.requireCurrentMember(memberId);
     const client = requireSupabase();
-    const { data, error } = await client
-      .from('work_updates')
-      .select('id, member_id, title, what_worked_on, technical_contribution, challenges, next_step, created_at, updated_at, update_attachments(id, kind, label, external_url, storage_path, original_name, mime_type, size_bytes, created_at)')
-      .eq('member_id', memberId)
-      .order('created_at', { ascending: false });
-    if (error) throw new Error(error.message);
+    let rows: WorkUpdateRow[] = [];
+    try {
+      const { data, error } = await client
+        .from('work_updates')
+        .select('id, member_id, week_number, title, what_worked_on, technical_contribution, challenges, next_step, created_at, updated_at, update_attachments(id, kind, label, external_url, storage_path, original_name, mime_type, size_bytes, created_at)')
+        .eq('member_id', memberId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      rows = (data ?? []) as unknown as WorkUpdateRow[];
+    } catch {
+      const { data, error } = await client
+        .from('work_updates')
+        .select('id, member_id, title, what_worked_on, technical_contribution, challenges, next_step, created_at, updated_at, update_attachments(id, kind, label, external_url, storage_path, original_name, mime_type, size_bytes, created_at)')
+        .eq('member_id', memberId)
+        .order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      rows = (data ?? []) as unknown as WorkUpdateRow[];
+    }
 
-    return Promise.all(((data ?? []) as unknown as WorkUpdateRow[]).map((row) => this.toWorkUpdate(row)));
+    return Promise.all(rows.map((row) => this.toWorkUpdate(row)));
   }
 
   async getUpdate(memberId: MemberEntityId, updateId: MemberEntityId): Promise<MemberWorkUpdate | null> {
     await this.requireCurrentMember(memberId);
     const client = requireSupabase();
-    const { data, error } = await client
-      .from('work_updates')
-      .select('id, member_id, title, what_worked_on, technical_contribution, challenges, next_step, created_at, updated_at, update_attachments(id, kind, label, external_url, storage_path, original_name, mime_type, size_bytes, created_at)')
-      .eq('id', updateId)
-      .eq('member_id', memberId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    return data ? this.toWorkUpdate(data as unknown as WorkUpdateRow) : null;
+    let row: WorkUpdateRow | null = null;
+    try {
+      const { data, error } = await client
+        .from('work_updates')
+        .select('id, member_id, week_number, title, what_worked_on, technical_contribution, challenges, next_step, created_at, updated_at, update_attachments(id, kind, label, external_url, storage_path, original_name, mime_type, size_bytes, created_at)')
+        .eq('id', updateId)
+        .eq('member_id', memberId)
+        .maybeSingle();
+      if (error) throw error;
+      row = data as unknown as WorkUpdateRow | null;
+    } catch {
+      const { data, error } = await client
+        .from('work_updates')
+        .select('id, member_id, title, what_worked_on, technical_contribution, challenges, next_step, created_at, updated_at, update_attachments(id, kind, label, external_url, storage_path, original_name, mime_type, size_bytes, created_at)')
+        .eq('id', updateId)
+        .eq('member_id', memberId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      row = data as unknown as WorkUpdateRow | null;
+    }
+    return row ? this.toWorkUpdate(row) : null;
   }
 
   async createUpdate(memberId: MemberEntityId, input: MemberWorkUpdateInput): Promise<MemberWorkUpdate | null> {
     await this.requireCurrentMember(memberId);
     const client = requireSupabase();
     const teamId = await this.getAssignedTeamId(memberId);
-    const { data, error } = await client
-      .from('work_updates')
-      .insert({ member_id: memberId, team_id: teamId, ...this.toUpdateFields(input) })
-      .select('id')
-      .single();
-    if (error) throw new Error(error.message);
+    const fields = this.toUpdateFields(input);
+    let insertedId: string;
+    try {
+      const { data, error } = await client
+        .from('work_updates')
+        .insert({ member_id: memberId, team_id: teamId, ...fields })
+        .select('id')
+        .single();
+      if (error) throw error;
+      insertedId = data.id as string;
+    } catch {
+      const { week_number: _, ...fallbackFields } = fields;
+      const { data, error } = await client
+        .from('work_updates')
+        .insert({ member_id: memberId, team_id: teamId, ...fallbackFields })
+        .select('id')
+        .single();
+      if (error) throw new Error(error.message);
+      insertedId = data.id as string;
+    }
 
     try {
-      await this.syncEvidence(memberId, data.id as string, input);
-      return this.getUpdate(memberId, data.id as string);
+      await this.syncEvidence(memberId, insertedId, input);
+      return this.getUpdate(memberId, insertedId);
     } catch (syncError) {
-      await client.from('work_updates').delete().eq('id', data.id as string).eq('member_id', memberId);
+      await client.from('work_updates').delete().eq('id', insertedId).eq('member_id', memberId);
       throw syncError;
     }
   }
@@ -252,15 +339,31 @@ export class SupabaseMemberRepository implements MemberRepository {
   ): Promise<MemberWorkUpdate | null> {
     await this.requireCurrentMember(memberId);
     const client = requireSupabase();
-    const { data, error } = await client
-      .from('work_updates')
-      .update(this.toUpdateFields(input))
-      .eq('id', updateId)
-      .eq('member_id', memberId)
-      .select('id')
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) return null;
+    const fields = this.toUpdateFields(input);
+    let updated = false;
+    try {
+      const { data, error } = await client
+        .from('work_updates')
+        .update(fields)
+        .eq('id', updateId)
+        .eq('member_id', memberId)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      updated = Boolean(data);
+    } catch {
+      const { week_number: _, ...fallbackFields } = fields;
+      const { data, error } = await client
+        .from('work_updates')
+        .update(fallbackFields)
+        .eq('id', updateId)
+        .eq('member_id', memberId)
+        .select('id')
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      updated = Boolean(data);
+    }
+    if (!updated) return null;
 
     await this.syncEvidence(memberId, updateId, input);
     return this.getUpdate(memberId, updateId);
@@ -480,6 +583,7 @@ export class SupabaseMemberRepository implements MemberRepository {
     return {
       id: row.id,
       memberId: row.member_id,
+      weekNumber: typeof row.week_number === 'number' && row.week_number > 0 ? row.week_number : 1,
       title: row.title,
       whatWorkedOn: row.what_worked_on,
       technicalContribution: row.technical_contribution,
@@ -525,13 +629,17 @@ export class SupabaseMemberRepository implements MemberRepository {
   }
 
   private toUpdateFields(input: MemberWorkUpdateInput) {
-    return {
+    const fields: Record<string, any> = {
       title: requiredText(input.title, 'Title'),
       what_worked_on: requiredText(input.whatWorkedOn, 'What you worked on'),
       technical_contribution: requiredText(input.technicalContribution, 'Technical contribution'),
       challenges: normaliseText(input.challenges) ?? null,
       next_step: normaliseText(input.nextStep) ?? null,
     };
+    if (typeof input.weekNumber === 'number' && input.weekNumber > 0) {
+      fields.week_number = input.weekNumber;
+    }
+    return fields;
   }
 
   private async getAttachments(updateId: MemberEntityId): Promise<AttachmentRow[]> {

@@ -279,6 +279,7 @@ export function MentorWorkspaceView({ mentorId, mentorName, externalView, naviga
   const [selectedRound, setSelectedRound] = useState<'all' | number>(2);
   const [memberToManage, setMemberToManage] = useState<MentorMemberSummary | null>(null);
   const [memberManagementTeamId, setMemberManagementTeamId] = useState<string | null>(null);
+  const [teamWeekFilter, setTeamWeekFilter] = useState<number | 'all'>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const loadOverview = async () => {
@@ -765,7 +766,39 @@ export function MentorWorkspaceView({ mentorId, mentorName, externalView, naviga
       <div className={styles.tabs} role="tablist" aria-label="Team workspace sections">{teamTabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={teamTab === tab.id} className={teamTab === tab.id ? styles.tabActive : styles.tab} onClick={() => { setTeamTab(tab.id); setSearch(''); setFilter('all'); }}>{tab.label}</button>)}</div>
       {teamTab === 'overview' && <div className={styles.dashboardGrid}><section className={`card ${styles.sectionCard}`}><div className={styles.sectionHeading}><div><h2>Member progress</h2><p>See who is on track and who needs a check-in.</p></div><button type="button" className={styles.textButton} onClick={() => setTeamTab('members')}>View members</button></div><div className={styles.memberPreview}>{workspace.members.map((member) => <button key={member.id} type="button" onClick={() => void openMember(member.id)}><span className={styles.avatar}>{member.name.charAt(0)}</span><span><strong>{member.name}</strong><small>{member.projectRole}</small></span><StatusBadge {...memberStatusBadge(member.progressStatus)} /></button>)}</div></section><section className={`card ${styles.sectionCard}`}><div className={styles.sectionHeading}><div><h2>Latest updates</h2><p>New work waiting for your review.</p></div><button type="button" className={styles.textButton} onClick={() => setTeamTab('updates')}>View updates</button></div>{workspace.updates.slice(0, 3).map((update) => <UpdateItem key={update.id} update={update} member={workspace.members.find((member) => member.id === update.memberId)} />)}</section></div>}
       {teamTab === 'members' && <><SearchFilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Search members or roles" filters={[{ id: 'member-status', label: 'Filter member status', value: filter, options: [{ value: 'all', label: 'All statuses' }, { value: 'on-track', label: 'On track' }, { value: 'needs-attention', label: 'Needs attention' }, { value: 'no-recent-update', label: 'No recent update' }] }]} onFilterChange={(_, value) => setFilter(value)} /><div className={styles.memberTable}>{filteredMembers.map((member) => <button key={member.id} type="button" onClick={() => void openMember(member.id)}><span className={styles.avatar}>{member.name.charAt(0)}</span><span className={styles.memberName}><strong>{member.name}</strong><small>{member.projectRole}</small></span><span><small>Last update</small><strong>{formatDate(member.lastUpdateAt)}</strong></span><StatusBadge {...memberStatusBadge(member.progressStatus)} /><ArrowRight size={16} /></button>)}</div>{!filteredMembers.length && <EmptyState title="No members found" description="Try a different member name, role, or status." icon={<Users size={24} />} />}</>}
-      {teamTab === 'updates' && <div className={styles.updateList}>{workspace.updates.map((update) => <UpdateItem key={update.id} update={update} member={workspace.members.find((member) => member.id === update.memberId)} expanded />)}</div>}
+      {teamTab === 'updates' && (
+        <div>
+          {workspace.updates.length > 0 && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600 }}>Filter updates by week:</span>
+              <button
+                type="button"
+                className={`btn btn-sm ${teamWeekFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setTeamWeekFilter('all')}
+                style={{ borderRadius: '20px', fontSize: '0.8rem', padding: '3px 12px' }}
+              >
+                All Weeks ({workspace.updates.length})
+              </button>
+              {Array.from(new Set(workspace.updates.map((u) => u.weekNumber || 1))).sort((a, b) => a - b).map((week) => (
+                <button
+                  key={week}
+                  type="button"
+                  className={`btn btn-sm ${teamWeekFilter === week ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setTeamWeekFilter(week)}
+                  style={{ borderRadius: '20px', fontSize: '0.8rem', padding: '3px 12px' }}
+                >
+                  Week {week} ({workspace.updates.filter((u) => (u.weekNumber || 1) === week).length})
+                </button>
+              ))}
+            </div>
+          )}
+          <div className={styles.updateList}>
+            {(teamWeekFilter === 'all' ? workspace.updates : workspace.updates.filter((u) => (u.weekNumber || 1) === teamWeekFilter)).map((update) => (
+              <UpdateItem key={update.id} update={update} member={workspace.members.find((member) => member.id === update.memberId)} expanded />
+            ))}
+          </div>
+        </div>
+      )}
     </>;
   };
 
@@ -788,8 +821,8 @@ export function MentorWorkspaceView({ mentorId, mentorName, externalView, naviga
         <Breadcrumbs items={[{ label: 'My teams', onClick: () => goToTeams() }, ...(workspace ? [{ label: workspace.team.name, onClick: () => setScreen('team') }] : []), { label: review.member.name }]} />
       </div>
       <PageHeader eyebrow="Member workspace" title={review.member.name} description={`${review.member.projectRole} · ${review.member.email}`} actions={<button type="button" className="btn btn-secondary" onClick={() => { setMemberToManage(review.member); setMemberManagementTeamId(review.member.teamId); }}><Settings2 size={16} />Manage member</button>} />
-      <section className={`card ${styles.profileCard}`}><div className={styles.profileIntro}><span className={styles.profileAvatar}>{review.member.name.charAt(0)}</span><div><h2>{review.member.projectRole}</h2><p>{review.member.bio}</p></div><StatusBadge {...memberStatusBadge(review.member.progressStatus)} /></div><div className={styles.profileGrid}><div><h3>Technical skills</h3><p className={styles.chipList}>{review.member.technicalSkills.map((skill) => <span key={skill}>{skill}</span>)}</p></div><div><h3>Responsibilities</h3><ul>{review.member.responsibilities.map((responsibility) => <li key={responsibility}>{responsibility}</li>)}</ul></div><div><h3>Activity</h3><p>{review.member.updateCount} updates · Last update {formatDate(review.member.lastUpdateAt)}</p></div></div>{review.member.professionalLinks && Object.values(review.member.professionalLinks).some(Boolean) && <div className={styles.profileLinks}><h3>Professional links</h3><div>{review.member.professionalLinks.linkedIn && <a href={review.member.professionalLinks.linkedIn} target="_blank" rel="noreferrer"><BriefcaseBusiness size={16} />LinkedIn</a>}{review.member.professionalLinks.github && <a href={review.member.professionalLinks.github} target="_blank" rel="noreferrer"><Code2 size={16} />GitHub</a>}{review.member.professionalLinks.portfolio && <a href={review.member.professionalLinks.portfolio} target="_blank" rel="noreferrer"><Globe2 size={16} />Portfolio</a>}</div></div>}</section>
-      <section className={`card ${styles.timelinePanel}`}><div className={styles.sectionHeading}><div><h2>Contribution timeline</h2><p>Technical work, evidence, and next steps.</p></div></div><div className={styles.updateList}>{review.updates.map((update) => <UpdateItem key={update.id} update={update} expanded />)}</div></section>
+      <section className={`card ${styles.profileCard}`}><div className={styles.profileIntro}><span className={styles.profileAvatar}>{review.member.name.charAt(0)}</span><div><h2>{review.member.projectRole}</h2><p>{review.member.bio}</p></div><StatusBadge {...memberStatusBadge(review.member.progressStatus)} /></div><div className={styles.profileGrid}><div><h3>Technical skills</h3><p className={styles.chipList}>{review.member.technicalSkills.map((skill) => <span key={skill}>{skill}</span>)}</p></div><div><h3>Responsibilities</h3><ul>{review.member.responsibilities.map((responsibility) => <li key={responsibility}>{responsibility}</li>)}</ul></div><div><h3>Activity</h3><p>{review.member.updateCount} updates · Last update {formatDate(review.member.lastUpdateAt)}</p></div></div>{review.member.professionalLinks && Object.values(review.member.professionalLinks).some(Boolean) && <div className={styles.profileLinks}><h3>Professional links & documents</h3><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{review.member.professionalLinks.cvUrl && <a href={review.member.professionalLinks.cvUrl} target="_blank" rel="noreferrer" style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#60a5fa', border: '1px solid rgba(96, 165, 250, 0.4)', padding: '6px 12px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}><FileText size={15} />{review.member.professionalLinks.cvFileName ? `CV (${review.member.professionalLinks.cvFileName})` : 'Resume / CV'}</a>}{review.member.professionalLinks.linkedIn && <a href={review.member.professionalLinks.linkedIn} target="_blank" rel="noreferrer"><BriefcaseBusiness size={16} />LinkedIn</a>}{review.member.professionalLinks.github && <a href={review.member.professionalLinks.github} target="_blank" rel="noreferrer"><Code2 size={16} />GitHub</a>}{review.member.professionalLinks.portfolio && <a href={review.member.professionalLinks.portfolio} target="_blank" rel="noreferrer"><Globe2 size={16} />Portfolio</a>}</div></div>}</section>
+      <section className={`card ${styles.timelinePanel}`}><div className={styles.sectionHeading}><div><h2>Weekly Contribution timeline</h2><p>Weekly progress updates, challenges encountered, and technical outputs.</p></div></div><div className={styles.updateList}>{review.updates.map((update) => <UpdateItem key={update.id} update={update} expanded />)}</div></section>
     </>;
   };
 
@@ -816,5 +849,76 @@ export function MentorWorkspaceView({ mentorId, mentorName, externalView, naviga
 }
 
 function UpdateItem({ update, member, expanded = false }: { update: MentorWorkUpdate; member?: MentorMemberSummary; expanded?: boolean }) {
-  return <article className={styles.updateItem}><div className={styles.updateHeader}><div><p>{member?.name ?? 'Member'} · {formatDate(update.submittedAt)}</p><h3>{update.title}</h3></div><StatusBadge label={update.reviewStatus === 'new' ? 'New update' : 'Reviewed'} status={update.reviewStatus === 'new' ? 'info' : 'success'} /></div><p>{expanded ? update.technicalDetails : update.summary}</p>{expanded && <><div className={styles.updateDetail}><strong>Summary</strong><span>{update.summary}</span></div>{update.challenges && <div className={styles.updateDetail}><strong>Challenge</strong><span>{update.challenges}</span></div>}{update.nextStep && <div className={styles.updateDetail}><strong>Next step</strong><span>{update.nextStep}</span></div>}{update.evidenceUrl && <a href={update.evidenceUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} />Open evidence</a>}{update.evidenceFile && <a href={update.evidenceFile.signedUrl} target="_blank" rel="noreferrer" download={update.evidenceFile.fileName}><Download size={14} />View or download {update.evidenceFile.fileName}</a>}</>}</article>;
+  const weekLabel = `Week ${update.weekNumber || 1}`;
+  return (
+    <article className={styles.updateItem}>
+      <div className={styles.updateHeader}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span
+              style={{
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2))',
+                color: '#a855f7',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                fontWeight: 700,
+                fontSize: '0.75rem',
+                border: '1px solid rgba(168, 85, 247, 0.3)',
+              }}
+            >
+              {weekLabel}
+            </span>
+            <p style={{ margin: 0 }}>{member?.name ?? 'Member'} · {formatDate(update.submittedAt)}</p>
+          </div>
+          <h3>{update.title}</h3>
+        </div>
+        <StatusBadge label={update.reviewStatus === 'new' ? 'New update' : 'Reviewed'} status={update.reviewStatus === 'new' ? 'info' : 'success'} />
+      </div>
+
+      <div style={{ marginTop: '8px' }}>
+        <p style={{ marginTop: '4px', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{update.summary}</p>
+      </div>
+
+      {expanded && update.technicalDetails && (
+        <div className={styles.updateDetail} style={{ marginTop: '10px' }}>
+          <strong>Technical Details & Implementation</strong>
+          <span style={{ whiteSpace: 'pre-wrap' }}>{update.technicalDetails}</span>
+        </div>
+      )}
+
+      {update.challenges && (
+        <div
+          style={{
+            marginTop: '12px',
+            padding: '12px 14px',
+            background: 'rgba(239, 68, 68, 0.08)',
+            borderLeft: '4px solid #ef4444',
+            borderRadius: '0 8px 8px 0',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f87171', fontWeight: 600, fontSize: '0.85rem', marginBottom: '4px' }}>
+            <AlertCircle size={15} />
+            <span>Challenges & Blockers (تحديات ومشاكل واجهت العضو):</span>
+          </div>
+          <span style={{ color: '#fca5a5', fontSize: '0.875rem', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+            {update.challenges}
+          </span>
+        </div>
+      )}
+
+      {expanded && update.nextStep && (
+        <div className={styles.updateDetail} style={{ marginTop: '10px' }}>
+          <strong>Next step</strong>
+          <span>{update.nextStep}</span>
+        </div>
+      )}
+
+      {expanded && (update.evidenceUrl || update.evidenceFile) && (
+        <div style={{ display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
+          {update.evidenceUrl && <a href={update.evidenceUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} />Open evidence</a>}
+          {update.evidenceFile && <a href={update.evidenceFile.signedUrl} target="_blank" rel="noreferrer" download={update.evidenceFile.fileName}><Download size={14} />View or download {update.evidenceFile.fileName}</a>}
+        </div>
+      )}
+    </article>
+  );
 }

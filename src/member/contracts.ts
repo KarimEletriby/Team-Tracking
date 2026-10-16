@@ -16,11 +16,13 @@ export interface MemberProfile {
   joinedAt: MemberISODateString;
 }
 
-/** Optional public links a member chooses to share with their mentor. */
+/** Optional public links and documents a member chooses to share with their mentor. */
 export interface MemberProfessionalLinks {
   linkedIn?: string;
   github?: string;
   portfolio?: string;
+  cvUrl?: string;
+  cvFileName?: string;
 }
 
 /** Read-only project context shown to a member. */
@@ -34,6 +36,7 @@ export interface MemberProjectContext {
 export interface MemberWorkUpdate {
   id: MemberEntityId;
   memberId: MemberEntityId;
+  weekNumber?: number;
   title: string;
   whatWorkedOn: string;
   technicalContribution: string;
@@ -75,21 +78,25 @@ export interface MemberHomeData {
   updateCount: number;
 }
 
-export type MemberProfileInput = Pick<
-  MemberProfile,
-  'projectRole' | 'bio' | 'technicalSkills' | 'responsibilities' | 'professionalLinks'
->;
+export interface MemberProfileInput {
+  projectRole: string;
+  bio: string;
+  technicalSkills: string[];
+  responsibilities: string[];
+  professionalLinks: MemberProfessionalLinks;
+  cvFile?: MemberEvidenceFile;
+}
 
-export type MemberWorkUpdateInput = Pick<
-  MemberWorkUpdate,
-  | 'title'
-  | 'whatWorkedOn'
-  | 'technicalContribution'
-  | 'challenges'
-  | 'nextStep'
-  | 'evidenceUrl'
-  | 'evidenceFile'
->;
+export interface MemberWorkUpdateInput {
+  weekNumber?: number;
+  title: string;
+  whatWorkedOn: string;
+  technicalContribution: string;
+  challenges?: string;
+  nextStep?: string;
+  evidenceUrl?: string;
+  evidenceFile?: MemberEvidenceFile;
+}
 
 /** Operations available to the signed-in member. */
 export interface MemberRepository {

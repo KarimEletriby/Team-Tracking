@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Code2, Globe2 } from 'lucide-react';
+import { BriefcaseBusiness, Code2, Globe2, FileText } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { MemberProfessionalLinks } from '../../member';
 import styles from './MemberUi.module.css';
@@ -71,8 +71,24 @@ export function ProfileSummaryCard({
 
       {professionalLinks && Object.values(professionalLinks).some(Boolean) && (
         <div className={styles.profileLinks}>
-          <span className={styles.detailLabel}>Professional links</span>
+          <span className={styles.detailLabel}>Professional links & documents</span>
           <div className={styles.linkList}>
+            {professionalLinks.cvUrl && (
+              <a
+                href={professionalLinks.cvUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  background: 'rgba(59, 130, 246, 0.12)',
+                  borderColor: 'rgba(96, 165, 250, 0.4)',
+                  color: '#60a5fa',
+                  fontWeight: 600,
+                }}
+              >
+                <FileText size={16} />
+                {professionalLinks.cvFileName ? `CV (${professionalLinks.cvFileName})` : 'Resume / CV'}
+              </a>
+            )}
             {professionalLinks.linkedIn && <a href={professionalLinks.linkedIn} target="_blank" rel="noreferrer"><BriefcaseBusiness size={16} />LinkedIn</a>}
             {professionalLinks.github && <a href={professionalLinks.github} target="_blank" rel="noreferrer"><Code2 size={16} />GitHub</a>}
             {professionalLinks.portfolio && <a href={professionalLinks.portfolio} target="_blank" rel="noreferrer"><Globe2 size={16} />Portfolio</a>}

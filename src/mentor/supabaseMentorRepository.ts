@@ -41,6 +41,7 @@ type WorkUpdateRow = {
   id: string;
   team_id: string;
   member_id: string;
+  week_number?: number | null;
   title: string;
   what_worked_on: string;
   technical_contribution: string;
@@ -75,9 +76,15 @@ function throwIfError(error: { message: string; code?: string } | null): void {
 function toProfessionalLinks(value: unknown): MentorProfessionalLinks | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const links = value as Record<string, unknown>;
-  const readLink = (key: string): string | undefined => typeof links[key] === 'string' ? links[key] : undefined;
-  const result = { linkedIn: readLink('linkedIn'), github: readLink('github'), portfolio: readLink('portfolio') };
-  return result.linkedIn || result.github || result.portfolio ? result : undefined;
+  const readLink = (key: string): string | undefined => typeof links[key] === 'string' && (links[key] as string).trim() ? (links[key] as string).trim() : undefined;
+  const result: MentorProfessionalLinks = {
+    linkedIn: readLink('linkedIn'),
+    github: readLink('github'),
+    portfolio: readLink('portfolio'),
+    cvUrl: readLink('cvUrl'),
+    cvFileName: readLink('cvFileName'),
+  };
+  return result.linkedIn || result.github || result.portfolio || result.cvUrl ? result : undefined;
 }
 
 function isRecent(date: string | null): boolean {
@@ -194,17 +201,16 @@ export class SupabaseMentorRepository implements MentorRepository {
     const membership = (memberships as MembershipRow[] | null)?.[0];
     if (!membership) return null;
 
-    const [profileResult, memberProfileResult, updatesResult] = await Promise.all([
+    const [profileResult, memberProfileResult, rawUpdates] = await Promise.all([
       supabase.from('profiles').select('id, full_name, email, avatar_url').eq('id', memberId).maybeSingle(),
       supabase.from('member_profiles').select('user_id, project_role, bio, technical_skills, responsibilities, social_links').eq('user_id', memberId).maybeSingle(),
-      supabase.from('work_updates').select('id, team_id, member_id, title, what_worked_on, technical_contribution, challenges, next_step, created_at').eq('member_id', memberId).order('created_at', { ascending: false }),
+      this.fetchWorkUpdates({ memberId }),
     ]);
     throwIfError(profileResult.error);
     throwIfError(memberProfileResult.error);
-    throwIfError(updatesResult.error);
     if (!profileResult.data) return null;
 
-    const updates = await this.toMentorUpdates((updatesResult.data ?? []) as WorkUpdateRow[]);
+    const updates = await this.toMentorUpdates(rawUpdates);
     const member = this.toMemberProfile({
       membership,
       profile: profileResult.data as ProfileRow,
@@ -465,17 +471,35 @@ export class SupabaseMentorRepository implements MentorRepository {
     };
   }
 
+  private async fetchWorkUpdates(filter: { teamId?: string; memberId?: string }): Promise<WorkUpdateRow[]> {
+    const supabase = requireSupabase();
+    try {
+      let q = supabase.from('work_updates').select('id, team_id, member_id, week_number, title, what_worked_on, technical_contribution, challenges, next_step, created_at');
+      if (filter.teamId) q = q.eq('team_id', filter.teamId);
+      if (filter.memberId) q = q.eq('member_id', filter.memberId);
+      const { data, error } = await q.order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as WorkUpdateRow[];
+    } catch {
+      let q = supabase.from('work_updates').select('id, team_id, member_id, title, what_worked_on, technical_contribution, challenges, next_step, created_at');
+      if (filter.teamId) q = q.eq('team_id', filter.teamId);
+      if (filter.memberId) q = q.eq('member_id', filter.memberId);
+      const { data, error } = await q.order('created_at', { ascending: false });
+      throwIfError(error);
+      return (data ?? []) as WorkUpdateRow[];
+    }
+  }
+
   private async loadTeamDetails(teamId: EntityId): Promise<{ members: MentorMemberProfile[]; updates: MentorWorkUpdate[] }> {
     const supabase = requireSupabase();
-    const [membershipsResult, updatesResult, invitationsResult] = await Promise.all([
+    const [membershipsResult, rawUpdates, invitationsResult] = await Promise.all([
       supabase.from('team_members').select('team_id, member_id, joined_at').eq('team_id', teamId),
-      supabase.from('work_updates').select('id, team_id, member_id, title, what_worked_on, technical_contribution, challenges, next_step, created_at').eq('team_id', teamId).order('created_at', { ascending: false }),
+      this.fetchWorkUpdates({ teamId }),
       supabase.from('team_invitations').select('id, email, full_name, created_at').eq('team_id', teamId),
     ]);
     throwIfError(membershipsResult.error);
-    throwIfError(updatesResult.error);
     const memberships = (membershipsResult.data ?? []) as MembershipRow[];
-    const updates = await this.toMentorUpdates((updatesResult.data ?? []) as WorkUpdateRow[]);
+    const updates = await this.toMentorUpdates(rawUpdates);
     const pendingInvites = (invitationsResult.data ?? []) as Array<{ id: string; email: string; full_name: string; created_at: string }>;
 
     let activeMembers: MentorMemberProfile[] = [];
@@ -542,6 +566,7 @@ export class SupabaseMentorRepository implements MentorRepository {
         id: row.id,
         teamId: row.team_id,
         memberId: row.member_id,
+        weekNumber: typeof row.week_number === 'number' && row.week_number > 0 ? row.week_number : 1,
         title: row.title,
         summary: row.what_worked_on,
         technicalDetails: row.technical_contribution,
